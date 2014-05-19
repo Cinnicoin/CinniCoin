@@ -36,10 +36,10 @@ public:
 public slots:
     void setRemoveEnabled(bool enabled);
     void clear();
-
+    
 signals:
     void removeEntry(SendCoinsEntry *entry);
-
+    void payAmountChanged();
 private slots:
     void on_deleteButton_clicked();
     void on_payTo_textChanged(const QString &address);
