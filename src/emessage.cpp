@@ -301,6 +301,39 @@ bool SecureMsgScanBlockChain()
 };
 
 
+int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
+{
+    /* returns
+        0 success,
+        1 error
+        2 invalid address
+        3 address does not refer to a key
+        4 address not in wallet
+    */
+    
+    CBitcoinAddress address;
+    if (!address.SetString(strAddress))
+        return 2; // Invalid CinniCoin address
+    
+    CKeyID keyID;
+    if (!address.GetKeyID(keyID))
+        return 3;
+    
+    CBitcoinAddress testAddr;
+    testAddr.Set(keyID);
+    
+    CKey key;
+    if (!pwalletMain->GetKey(keyID, key))
+        return 4;
+    
+    key.SetUnCompressedPubKey();  // let openSSL recover Y coordinate
+    CPubKey pubKey = key.GetPubKey();
+    printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
+    strPublicKey = EncodeBase58(pubKey.Raw());
+    //std::string keyb58 = EncodeBase58(pubKey.Raw());
+    //printf("keyb58 %s.\n", keyb58.c_str());
+    return 0;
+};
 
 int GetLocalKeys(std::string strAddress)
 {
