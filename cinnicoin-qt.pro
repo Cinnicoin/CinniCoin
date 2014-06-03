@@ -20,14 +20,18 @@ windows:LIBS += -lshlwapi
 LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,)
 LIBS += -lssl -lcrypto -ldb_cxx$$BDB_LIB_SUFFIX
 windows:LIBS += -lws2_32 -lole32 -loleaut32 -luuid -lgdi32
-LIBS += -lboost_system-mgw46-mt-sd-1_54 -lboost_filesystem-mgw46-mt-sd-1_54 -lboost_program_options-mgw46-mt-sd-1_54 -lboost_thread-mgw46-mt-sd-1_54
-BOOST_LIB_SUFFIX=-mgw46-mt-sd-1_54
-BOOST_INCLUDE_PATH=C:/deps/boost46-54
-BOOST_LIB_PATH=C:/deps/boost46-54/stage/lib
+LIBS += -lboost_system -lboost_filesystem -lboost_program_options -lboost_thread
+#BOOST_LIB_SUFFIX=.1.54.0
+BOOST_INCLUDE_PATH=/usr/include/boost
+BOOST_LIB_PATH=/usr/lib/x86_64-linux-gnu/
 BDB_INCLUDE_PATH=c:/deps/db/build_unix
 BDB_LIB_PATH=c:/deps/db/build_unix
 OPENSSL_INCLUDE_PATH=c:/deps/ssl/include
 OPENSSL_LIB_PATH=c:/deps/ssl
+
+OBJECTS_DIR = build
+MOC_DIR = build
+UI_DIR = build
 
 # use: qmake "RELEASE=1"
 contains(RELEASE, 1) {
@@ -198,7 +202,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/rpcconsole.h \
     src/version.h \
     src/netbase.h \
-    src/clientversion.h
+    src/clientversion.h \
+    src/emessage.h \
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -265,7 +270,9 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt-x86.S \
     src/scrypt-x86_64.S \
     src/scrypt_mine.cpp \
-    src/pbkdf2.cpp
+    src/pbkdf2.cpp \
+    src/emessage.cpp \
+    src/rpcemessage.cpp
 
 RESOURCES += \
     src/qt/bitcoin.qrc

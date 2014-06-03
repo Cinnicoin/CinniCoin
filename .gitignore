@@ -1,3 +1,11 @@
+
+qrc_bitcoin.cpp
+CinniCoin-qt
+Makefile
+src/CinniCoind
+src/build.h
+
+
 #################
 ## Eclipse
 #################

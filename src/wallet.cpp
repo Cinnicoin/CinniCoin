@@ -485,7 +485,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         // Notify UI of new or updated transaction
         NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
 
-		// notify an external script when a wallet transaction comes in or is updated
+        // notify an external script when a wallet transaction comes in or is updated
         std::string strCmd = GetArg("-walletnotify", "");
 
         if ( !strCmd.empty())
@@ -698,7 +698,7 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, int64& nGenerated, i
         BOOST_FOREACH(const PAIRTYPE(CTxDestination,int64)& s, listSent)
             nSent += s.second;
         nFee = allFee;
-		nGenerated = allGeneratedMature;
+        nGenerated = allGeneratedMature;
     }
     {
         LOCK(pwallet->cs_wallet);
@@ -1244,7 +1244,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64> >& vecSend, CW
         return false;
 
     wtxNew.BindWallet(this);
-		
+
     {
         LOCK2(cs_main, cs_wallet);
         // txdb must be opened before the mapWallet lock
@@ -1379,10 +1379,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     // The following split & combine thresholds are important to security
     // Should not be adjusted if you don't understand the consequences
     static unsigned int nStakeSplitAge = (60 * 60 * 24 * 30);
-	const CBlockIndex* pIndex0 = GetLastBlockIndex(pindexBest, false);
+    const CBlockIndex* pIndex0 = GetLastBlockIndex(pindexBest, false);
     int64 nCombineThreshold = 0;
-	if(pIndex0->pprev)
-		nCombineThreshold = GetProofOfWorkReward(pIndex0->nHeight, MIN_TX_FEE, pIndex0->pprev->GetBlockHash()) / 3;
+    if(pIndex0->pprev)
+        nCombineThreshold = GetProofOfWorkReward(pIndex0->nHeight, MIN_TX_FEE, pIndex0->pprev->GetBlockHash()) / 3;
 
     CBigNum bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
@@ -1416,30 +1416,30 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     {
         CTxDB txdb("r");
         CTxIndex txindex;
-		{
-		    LOCK2(cs_main, cs_wallet);
-			if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
-				continue;
-		}
+        {
+            LOCK2(cs_main, cs_wallet);
+            if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
+                continue;
+        }
 
         // Read block header
         CBlock block;
-		{
-		    LOCK2(cs_main, cs_wallet);
-			if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
-				continue;
-		}
+        {
+            LOCK2(cs_main, cs_wallet);
+            if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+                continue;
+        }
 
         static int nMaxStakeSearchInterval = 60;
-		
-		// printf(">> block.GetBlockTime() = %"PRI64d", nStakeMinAge = %d, txNew.nTime = %d\n", block.GetBlockTime(), nStakeMinAge,txNew.nTime); 
+        
+        // printf(">> block.GetBlockTime() = %"PRI64d", nStakeMinAge = %d, txNew.nTime = %d\n", block.GetBlockTime(), nStakeMinAge,txNew.nTime); 
         if (block.GetBlockTime() + nStakeMinAge > txNew.nTime - nMaxStakeSearchInterval)
             continue; // only count coins meeting min age requirement
 
         bool fKernelFound = false;
         for (unsigned int n=0; n<min(nSearchInterval,(int64)nMaxStakeSearchInterval) && !fKernelFound && !fShutdown; n++)
         {
-			// printf(">> In.....\n");
+            // printf(">> In.....\n");
             // Search backward in time from the given txNew timestamp 
             // Search nSearchInterval seconds back up to nMaxStakeSearchInterval
             uint256 hashProofOfStake = 0;
@@ -1486,7 +1486,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 txNew.vin.push_back(CTxIn(pcoin.first->GetHash(), pcoin.second));
                 nCredit += pcoin.first->vout[pcoin.second].nValue;
 
-				// printf(">> Wallet: CreateCoinStake: nCredit = %"PRI64d"\n", nCredit);
+                // printf(">> Wallet: CreateCoinStake: nCredit = %"PRI64d"\n", nCredit);
 
                 vwtxPrev.push_back(pcoin.first);
                 txNew.vout.push_back(CTxOut(0, scriptPubKeyOut));
@@ -1503,10 +1503,10 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             break; // if kernel is found stop searching
     }
     if (nCredit == 0 || nCredit > nBalance - nReserveBalance)
-	{
-		// printf(">> Wallet: CreateCoinStake: nCredit = %"PRI64d", nBalance = %"PRI64d", nReserveBalance = %"PRI64d"\n", nCredit, nBalance, nReserveBalance);
+    {
+        // printf(">> Wallet: CreateCoinStake: nCredit = %"PRI64d", nBalance = %"PRI64d", nReserveBalance = %"PRI64d"\n", nCredit, nBalance, nReserveBalance);
         return false;
-	}
+    }
 
     BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
     {
@@ -1539,7 +1539,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
     {
         uint64 nCoinAge;
         CTxDB txdb("r");
-		const CBlockIndex* pIndex0 = GetLastBlockIndex(pindexBest, false);
+        const CBlockIndex* pIndex0 = GetLastBlockIndex(pindexBest, false);
 
         if (!txNew.GetCoinAge(txdb, nCoinAge))
             return error("CreateCoinStake : failed to calculate coin age");

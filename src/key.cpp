@@ -126,6 +126,17 @@ void CKey::SetCompressedPubKey()
     fCompressedPubKey = true;
 }
 
+void CKey::SetUnCompressedPubKey()
+{
+    EC_KEY_set_conv_form(pkey, POINT_CONVERSION_UNCOMPRESSED);
+    fCompressedPubKey = false;
+}
+
+EC_KEY* CKey::GetECKey()
+{
+    return pkey;
+}
+
 void CKey::Reset()
 {
     fCompressedPubKey = false;
@@ -367,6 +378,7 @@ bool CKey::SetCompactSignature(uint256 hash, const std::vector<unsigned char>& v
         ECDSA_SIG_free(sig);
         return true;
     }
+    ECDSA_SIG_free(sig);
     return false;
 }
 

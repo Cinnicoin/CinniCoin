@@ -113,10 +113,14 @@ protected:
     bool fSet;
     bool fCompressedPubKey;
 
-    void SetCompressedPubKey();
+    
 
 public:
-
+    void SetCompressedPubKey();
+    void SetUnCompressedPubKey();
+    
+    EC_KEY* GetECKey();
+    
     void Reset();
 
     CKey();

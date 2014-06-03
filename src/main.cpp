@@ -41,9 +41,9 @@ static CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
 static CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 20);
 static CBigNum bnProofOfStakeLimitTestNet(~uint256(0) >> 20);
 
-unsigned int nStakeMinAge = 60 * 60 * 24 * 3;	// minimum age for coin age: 3d
-unsigned int nStakeMaxAge = 60 * 60 * 24 * 100;	// stake age of full weight: 100d
-unsigned int nStakeTargetSpacing = 15;			// 15 sec block spacing
+unsigned int nStakeMinAge = 60 * 60 * 24 * 3;   // minimum age for coin age: 3d
+unsigned int nStakeMaxAge = 60 * 60 * 24 * 100; // stake age of full weight: 100d
+unsigned int nStakeTargetSpacing = 15;          // 15 sec block spacing
 
 int64 nChainStartTime = 1397809625;
 int nCoinbaseMaturity = 30;
@@ -463,14 +463,14 @@ bool CTransaction::CheckTransaction() const
     for (unsigned int i = 0; i < vout.size(); i++)
     {
         const CTxOut& txout = vout[i];
-		
+
         if (txout.IsEmpty() && !IsCoinBase() && !IsCoinStake())
             return DoS(100, error("CTransaction::CheckTransaction() : txout empty for user transaction"));
-	
+
        /*
         if ((!txout.IsEmpty()) && txout.nValue < MIN_TXOUT_AMOUNT)
            return DoS(100, error("CTransaction::CheckTransaction() : txout.nValue below minimum"));
-		   */
+       */
 
         if (txout.nValue < 0)
            return DoS(100, error("CTransaction::CheckTransaction() : txout.nValue negative"));
@@ -934,7 +934,7 @@ uint256 WantedByOrphan(const CBlock* pblockOrphan)
 
 int generateMTRandom(unsigned int s, int range)
 {
-	random::mt19937 gen(s);
+    random::mt19937 gen(s);
     random::uniform_int_distribution<> dist(0, range);
     return dist(gen);
 }
@@ -944,13 +944,13 @@ int generateMTRandom(unsigned int s, int range)
 // miner's coin base reward based on nBits
 int64 GetProofOfWorkReward(int nHeight, int64 nFees, uint256 prevHash)
 {
-	int64 nSubsidy = 0.0 * COIN;
+    int64 nSubsidy = 0.0 * COIN;
 
-	if(nHeight <= 17280)
-	{
-		nSubsidy = 868 * COIN;	// 868 coins per block for the first three days.
-		return nSubsidy + nFees;
-	}
+    if(nHeight <= 17280)
+    {
+        nSubsidy = 868 * COIN;	// 868 coins per block for the first three days.
+        return nSubsidy + nFees;
+    }
 
     return nSubsidy + nFees;
 }
@@ -961,10 +961,10 @@ int64 GetProofOfWorkReward(int nHeight, int64 nFees, uint256 prevHash)
 int64 GetProofOfStakeReward(int64 nCoinAge, unsigned int nBits, unsigned int nTime, int nHeight)
 {
     int64 nRewardCoinYear;
-	nRewardCoinYear = MAX_MINT_PROOF_OF_STAKE;
+    nRewardCoinYear = MAX_MINT_PROOF_OF_STAKE;
 
     int64 nSubsidy = nCoinAge * nRewardCoinYear / 365;
-	if (fDebug && GetBoolArg("-printcreation"))
+    if (fDebug && GetBoolArg("-printcreation"))
         printf("GetProofOfStakeReward(): create=%s nCoinAge=%"PRI64d" nBits=%d\n", FormatMoney(nSubsidy).c_str(), nCoinAge, nBits);
 
     return nSubsidy;
@@ -1042,14 +1042,14 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
         return bnTargetLimit.GetCompact(); // second block
 
     int64 nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
-	if(nActualSpacing < 0)
-	{
-		nActualSpacing = 1;
-	}
-	else if(nActualSpacing > nTargetTimespan)
-	{
-		nActualSpacing = nTargetTimespan;
-	}
+    if(nActualSpacing < 0)
+    {
+        nActualSpacing = 1;
+    }
+    else if(nActualSpacing > nTargetTimespan)
+    {
+        nActualSpacing = nTargetTimespan;
+    }
 
     // ppcoin: target change every block
     // ppcoin: retarget with exponential moving toward target spacing
@@ -1060,7 +1060,7 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     int64 nInterval = nTargetTimespan / nTargetSpacing;
     bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
     bnNew /= ((nInterval + 1) * nTargetSpacing);
-	
+
     if (bnNew > bnTargetLimit)
         bnNew = bnTargetLimit;
 
@@ -2506,7 +2506,7 @@ bool LoadBlockIndex(bool fAllowNew)
         bnProofOfWorkLimit = bnProofOfWorkLimitTestNet; // 0x0000ffff PoW base target is fixed in testnet
         nStakeMinAge = 20 * 60; // test net min age is 20 min
         nStakeMaxAge = 60 * 60; // test net min age is 60 min
-		nModifierInterval = 60; // test modifier interval is 2 minutes
+        nModifierInterval = 60; // test modifier interval is 2 minutes
         nCoinbaseMaturity = 10; // test maturity is 10 blocks
         nStakeTargetSpacing = 3 * 60; // test block spacing is 3 minutes
     }
@@ -2545,20 +2545,20 @@ bool LoadBlockIndex(bool fAllowNew)
         block.nBits    = bnProofOfWorkLimit.GetCompact();
         block.nNonce   = 586144;
 
-        if (false  && (block.GetHash() != hashGenesisBlock)) {
-	 
-		// This will figure out a valid hash and Nonce if you're
-		// creating a different genesis block:
-		    uint256 hashTarget = CBigNum().SetCompact(block.nBits).getuint256();
-		    while (block.GetHash() > hashTarget)
-		       {
-		           ++block.nNonce;
-		           if (block.nNonce == 0)
-		           {
-		               printf("NONCE WRAPPED, incrementing time");
-		               ++block.nTime;
-		           }
-		       }
+        if (false  && (block.GetHash() != hashGenesisBlock))
+        {
+            // This will figure out a valid hash and Nonce if you're
+            // creating a different genesis block:
+            uint256 hashTarget = CBigNum().SetCompact(block.nBits).getuint256();
+            while (block.GetHash() > hashTarget)
+            {
+                ++block.nNonce;
+                if (block.nNonce == 0)
+                {
+                    printf("NONCE WRAPPED, incrementing time");
+                    ++block.nTime;
+                }
+            }
         }
 
 
@@ -2568,9 +2568,9 @@ bool LoadBlockIndex(bool fAllowNew)
         printf("block.hashMerkleRoot == %s\n", block.hashMerkleRoot.ToString().c_str());
         printf("block.nTime = %u \n", block.nTime);
         printf("block.nNonce = %u \n", block.nNonce);
-			block.print();
+        block.print();
         assert(block.hashMerkleRoot == uint256("0x1da9d2106a64c04bf77835fa53bb632203dcfaaf2816986d0b8d7f5b5d677f13"));
-		assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
 
         // Start new block file
         unsigned int nFile;
@@ -3543,6 +3543,8 @@ bool ProcessMessages(CNode* pfrom)
         {
             if ((int)vRecv.size() > nHeaderSize)
             {
+                //MYTOKEN_TEMP
+                
                 printf("\n\nPROCESSMESSAGE MESSAGESTART NOT FOUND\n\n");
                 vRecv.erase(vRecv.begin(), vRecv.end() - nHeaderSize);
             }

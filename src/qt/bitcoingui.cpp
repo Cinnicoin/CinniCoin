@@ -106,6 +106,10 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     receiveCoinsPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
+    messagePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    invoicePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    receiptPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+
     sendCoinsPage = new SendCoinsDialog(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
@@ -116,6 +120,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
+    centralWidget->addWidget(messagePage);
+    centralWidget->addWidget(invoicePage);
+    centralWidget->addWidget(receiptPage);
     setCentralWidget(centralWidget);
 
     // Create status bar
@@ -224,6 +231,24 @@ void BitcoinGUI::createActions()
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
     tabGroup->addAction(addressBookAction);
 
+    messageAction = new QAction(QIcon(":/icons/em"), tr("&Encrypted Messaging"), this);
+    messageAction->setToolTip(tr("Encrypted Messaging"));
+    messageAction->setCheckable(true);
+    messageAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+    tabGroup->addAction(messageAction);
+
+    invoiceAction = new QAction(QIcon(":/icons/address-book"), tr("&Encrypted Invoices"), this);
+    invoiceAction->setToolTip(tr("Invoicing"));
+    invoiceAction->setCheckable(true);
+    invoiceAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
+    tabGroup->addAction(invoiceAction);
+
+    receiptAction = new QAction(QIcon(":/icons/address-book"), tr("&Encrypted Receipts"), this);
+    receiptAction->setToolTip(tr("Receipting"));
+    receiptAction->setCheckable(true);
+    receiptAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_8));
+    tabGroup->addAction(receiptAction);
+
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
     connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
@@ -234,6 +259,12 @@ void BitcoinGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(messageAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(messageAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(invoiceAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(invoiceAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(receiptAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(receiptAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
 
     quitAction = new QAction(QIcon(":/icons/quit"), tr("E&xit"), this);
     quitAction->setToolTip(tr("Quit application"));
@@ -313,17 +344,24 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
-    QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
+    QToolBar *toolbar = new QToolBar(tr("Main toolbar"), this);
+    addToolBar(Qt::LeftToolBarArea, toolbar);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
+    toolbar->addSeparator();
+    toolbar->addAction(messageAction);
+    toolbar->addAction(invoiceAction);
+    toolbar->addAction(receiptAction);
+    toolbar->addSeparator();
+    toolbar->addAction(exportAction);
 
-    QToolBar *toolbar2 = addToolBar(tr("Actions toolbar"));
-    toolbar2->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    toolbar2->addAction(exportAction);
+    foreach(QAction *action, toolbar->actions()) {
+        toolbar->widgetForAction(action)->setFixedWidth(200);
+    }
 }
 
 void BitcoinGUI::setClientModel(ClientModel *clientModel)
@@ -419,6 +457,8 @@ void BitcoinGUI::createTrayIcon()
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(sendCoinsAction);
     trayIconMenu->addAction(receiveCoinsAction);
+    trayIconMenu->addSeparator();
+    trayIconMenu->addAction(messageAction);
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(signMessageAction);
     trayIconMenu->addAction(verifyMessageAction);

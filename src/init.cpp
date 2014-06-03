@@ -10,6 +10,8 @@
 #include "util.h"
 #include "ui_interface.h"
 #include "checkpoints.h"
+#include "emessage.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
@@ -836,6 +838,12 @@ bool AppInit2()
 
     printf("Loaded %i addresses from peers.dat  %"PRI64d"ms\n",
            addrman.size(), GetTimeMillis() - nStart);
+    
+    
+    // ********************************************************* Step 10.1: startup secure messaging
+    
+    SecureMsgStart();
+    
 
     // ********************************************************* Step 11: start node
 
@@ -857,6 +865,8 @@ bool AppInit2()
     if (fServer)
         NewThread(ThreadRPCServer, NULL);
 
+    
+    
     // ********************************************************* Step 12: finished
 
     uiInterface.InitMessage(_("Done loading"));

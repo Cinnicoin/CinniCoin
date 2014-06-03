@@ -132,7 +132,10 @@ OBJS= \
     obj/pbkdf2.o \
     obj/scrypt_mine.o \
     obj/scrypt-x86.o \
-    obj/scrypt-x86_64.o
+    obj/scrypt-x86_64.o \
+    obj/scrypt-x86_64.o \
+    obj/emessage.o \
+    obj/rpcemessage.o 
 
 
 all: CinniCoind

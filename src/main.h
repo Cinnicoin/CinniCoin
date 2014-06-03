@@ -34,8 +34,8 @@ static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
 static const unsigned int MAX_INV_SZ = 50000;
 static const int64 MIN_TX_FEE = 0.5 * CENT;
 static const int64 MIN_RELAY_TX_FEE = 0.5 * CENT;
-static const int64 MAX_MONEY = 100000000 * COIN;			// 1 mil
-static const int64 MAX_MINT_PROOF_OF_STAKE = 0.035 * COIN;	// 3.5% annual interest
+static const int64 MAX_MONEY = 100000000 * COIN;            // 1 mil
+static const int64 MAX_MINT_PROOF_OF_STAKE = 0.035 * COIN;  // 3.5% annual interest
 
 static const int64 MIN_TXOUT_AMOUNT = MIN_TX_FEE;
 
@@ -455,7 +455,7 @@ public:
         READWRITE(vin);
         READWRITE(vout);
         READWRITE(nLockTime);
-	)
+    )
 
     void SetNull()
     {
@@ -652,7 +652,7 @@ int64 GetMinFee(unsigned int nBlockSize=1, bool fAllowFree=true, enum GetMinFee_
             vin.size(),
             vout.size(),
             nLockTime
-			);
+            );
 
         for (unsigned int i = 0; i < vin.size(); i++)
             str += "    " + vin[i].ToString() + "\n";
