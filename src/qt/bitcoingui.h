@@ -10,6 +10,9 @@ class WalletModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
+class MessagePage;
+class InvoicesPage;
+class ReceiptsPage;
 class SendCoinsDialog;
 class SignVerifyMessageDialog;
 class Notificator;
@@ -63,6 +66,9 @@ private:
     QWidget *transactionsPage;
     AddressBookPage *addressBookPage;
     AddressBookPage *receiveCoinsPage;
+    AddressBookPage *messagePage;
+    AddressBookPage *invoicePage;
+    AddressBookPage *receiptPage;
     SendCoinsDialog *sendCoinsPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
 
@@ -78,6 +84,9 @@ private:
     QAction *quitAction;
     QAction *sendCoinsAction;
     QAction *addressBookAction;
+    QAction *messageAction;
+    QAction *invoiceAction;
+    QAction *receiptAction;
     QAction *signMessageAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
