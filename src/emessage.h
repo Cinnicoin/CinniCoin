@@ -5,9 +5,10 @@
 #define CINNICOIN_EMESSAGE_H
 
 
-
+#include "net.h"
 #include "wallet.h"
 #include "db.h"
+#include "emessageClass.h"
 
 // -- just get at the data
 class CBitcoinAddress_B : public CBitcoinAddress
@@ -91,44 +92,14 @@ public:
 };
 
 
-class SecureMessage
-{
-public:
-    SecureMessage()
-    {
-        pPayload = NULL;
-    };
-    
-    ~SecureMessage()
-    {
-        if (pPayload)
-            delete[] pPayload;
-    };
-    
-    unsigned char   hash[4];
-    unsigned char   version;
-    uint64_t        timestamp;
-    unsigned char   destHash[20];
-    unsigned char   iv[16];
-    unsigned char   cpkR[33];
-    unsigned char   mac[32];
-    uint32_t        nPayload;
-    unsigned char*  pPayload;
-        
-};
-
-class MessageData
-{
-// Decrypted SecureMessage data
-public:
-    uint64_t                    timestamp;
-    std::vector<unsigned char>  vchToAddress;
-    std::vector<unsigned char>  vchFromAddress;
-    std::vector<unsigned char>  vchMessage; // null terminated
-};
 
 
 bool SecureMsgStart();
+bool SecureMsgStop();
+
+bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRecv);
+
+bool SecureMsgSendData(CNode* pto, bool fSendTrickle);
 
 
 
@@ -138,6 +109,8 @@ bool SecureMsgScanBlockChain();
 int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
+int SecureMsgStore(SecureMessage& smsg);
+int SecureMsgRetrieve(SecureMessage& smsg, long int offset);
 
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message);
 

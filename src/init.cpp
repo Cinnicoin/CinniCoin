@@ -82,6 +82,9 @@ void Shutdown(void* parg)
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         NewThread(ExitTimeout, NULL);
+        
+        SecureMsgStop();
+        
         Sleep(50);
         printf("CinniCoin exited\n\n");
         fExit = true;

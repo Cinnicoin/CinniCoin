@@ -10,7 +10,12 @@ Notes:
 
 #include "emessage.h"
 
+#include <stdint.h>
+#include <time.h>
+#include <map>
 #include <stdexcept>
+#include <errno.h>
+
 #include <openssl/crypto.h>
 #include <openssl/ec.h>
 #include <openssl/ecdh.h>
@@ -18,8 +23,7 @@ Notes:
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
-#include <stdint.h>
-#include <time.h>
+
 
 
 #include "base58.h"
@@ -28,6 +32,23 @@ Notes:
 
 #include "lz4/lz4.h"
 #include "lz4/lz4.c"
+
+
+//std::map<std::string, SecMsgNode*> smsgNodeData;
+
+//std::vector<SecureMessage> smsgStore; // temporary
+
+//std::vector<SecureMessage*> smsgUnsent;
+
+
+
+std::vector<SecMsgLocation> smsgSend; // temporary
+
+std::vector<SecMsgLocation> smsgStored; // move to db?
+
+
+
+CCriticalSection cs_smsg;
 
 
 bool SMsgCrypter::SetKey(const std::vector<unsigned char>& chNewKey, unsigned char* chNewIV)
@@ -112,6 +133,155 @@ bool SecureMsgStart()
     return true;
 };
 
+/** called from Shutdown() in init.cpp */
+bool SecureMsgStop()
+{
+    printf("Stopping secure messaging.\n");
+    
+    
+    return true;
+};
+
+
+bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRecv)
+{
+    printf("SecureMsgReceiveData() %s %s.\n", pfrom->addrName.c_str(), strCommand.c_str());
+    
+    /*
+        Called from ProcessMessage
+        Runs in ThreadMessageHandler2
+    */
+    
+    //vector<char> vHeaders;
+    //pto->PushMessage("smsgQuery", "enabled");
+    if (strCommand == "smsgPong")
+    {
+        pfrom->smsgData.enabled = true;
+    }
+    if (strCommand == "smsgPing")
+    {
+        //printf("got smsgPing.\n");
+        pfrom->PushMessage("smsgPong");
+    } else
+    if (strCommand == "smsgMsg")
+    {
+        //printf("got smsgPing.\n");
+        //pfrom->PushMessage("smsgPong");
+        
+        // todo proper recieve function
+        std::vector<unsigned char> vchDuplicate;
+        vRecv >> vchDuplicate;
+        printf("vchDuplicate.size() %d.\n",vchDuplicate.size());
+        
+        SecureMessage smsg;
+        
+        memcpy(&smsg.hash[0], &vchDuplicate[0], SMSG_HDR_LEN);
+        printf("smsg.nPayload %d.\n",smsg.nPayload);
+        
+        try {
+            smsg.pPayload = new unsigned char[smsg.nPayload];
+        } catch (std::exception& e)
+        {
+            printf("Could not allocate pPayload, exception: %s.\n", e.what());
+            return false;
+        };
+
+        memcpy(smsg.pPayload, &vchDuplicate[SMSG_HDR_LEN], smsg.nPayload);
+        
+        // Todo move this elsewhere, ScanSecureMessage/s()
+        
+        BOOST_FOREACH(const PAIRTYPE(CTxDestination, std::string)& entry, pwalletMain->mapAddressBook)
+        {
+            if (!IsMine(*pwalletMain, entry.first))
+                continue;
+            
+            //printf("entry.first %s.\n", entry.first.ToString.c_str());
+            CBitcoinAddress coinAddress(entry.first);
+            printf("coinAddress: %s.\n", coinAddress.ToString().c_str());
+            
+            std::string addressTo = coinAddress.ToString();
+            printf("addressTo: %s.\n", addressTo.c_str());
+            
+            MessageData msg;
+            if (SecureMsgDecrypt(addressTo, smsg, msg) == 0)
+            {
+                printf("Decrypted message!\n");
+                break;
+            };
+        
+        };
+        
+        
+    } else
+    {
+        // Unknown message
+    }
+    
+    
+    return true;
+};
+
+bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
+{
+    //printf("SecureMsgSendData() %s.\n", pto->addrName.c_str());
+    /*
+        Called from ProcessMessage
+        Runs in ThreadMessageHandler2
+    */
+    
+    uint64_t now = time(NULL);
+    
+    
+    
+    if (pto->smsgData.lastSeen == 0)
+    {
+        // -- first contact
+        //vector<char> vData;
+        //vData.resize(strlen("enabled"));
+        //memcpy(&vData[0], "enabled", strlen("enabled"));
+        //pto->PushMessage("smsgQuery", "enabled");
+        
+        printf("SecureMsgSendData() new node %s.\n", pto->addrName.c_str());
+        // Send smsgPing once, do nothing until receive 1st smsgPong (then set enabled)
+        pto->PushMessage("smsgPing");
+        pto->smsgData.lastSeen = time(NULL);
+        return true;
+    } else
+    if (!pto->smsgData.enabled
+        || now - pto->smsgData.lastSeen < 10)
+    {
+        return true;
+    }
+    
+    
+    pto->PushMessage("smsgPing");
+    
+    
+    
+    for (int i = 0; i < smsgSend.size(); ++i)
+    {
+        SecureMessage smsg;
+        SecureMsgRetrieve(smsg, smsgSend[i].offset);
+        // todo: retrieve directly into vch
+        //printf("after SecureMsgRetrieve %d.\n", smsg.nPayload);
+        
+        std::vector<unsigned char> vchDuplicate;
+        vchDuplicate.resize(SMSG_HDR_LEN + smsg.nPayload);
+        
+        memcpy(&vchDuplicate[0], &smsg.hash[0], SMSG_HDR_LEN);
+        memcpy(&vchDuplicate[SMSG_HDR_LEN], smsg.pPayload, smsg.nPayload);
+        
+        pto->PushMessage("smsgMsg", vchDuplicate);
+        
+    };
+    smsgSend.clear();
+    
+    
+    pto->smsgData.lastSeen = time(NULL);
+    
+    return true;
+};
+
 
 
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
@@ -155,7 +325,6 @@ bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
             
             */
             
-            unsigned int nSigOps = 0;
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
                 CScript *script = &tx.vin[i].scriptSig;
@@ -199,7 +368,7 @@ bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
                         if (nOut >= txOfPrevOutput.vout.size())
                         {
                             printf("Output %u, not in transaction: %s.\n", nOut, prevoutHash.ToString().c_str());
-                            printf("txOfPrevOutput.vout.size() %u.\n", txOfPrevOutput.vout.size());
+                            //printf("txOfPrevOutput.vout.size() %u.\n", txOfPrevOutput.vout.size());
                             continue;
                         };
                         
@@ -319,8 +488,8 @@ int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
     if (!address.GetKeyID(keyID))
         return 3;
     
-    CBitcoinAddress testAddr;
-    testAddr.Set(keyID);
+    //CBitcoinAddress testAddr;
+    //testAddr.Set(keyID);
     
     CKey key;
     if (!pwalletMain->GetKey(keyID, key))
@@ -330,55 +499,11 @@ int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
     CPubKey pubKey = key.GetPubKey();
     printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
     strPublicKey = EncodeBase58(pubKey.Raw());
+    
     //std::string keyb58 = EncodeBase58(pubKey.Raw());
     //printf("keyb58 %s.\n", keyb58.c_str());
     return 0;
 };
-
-int GetLocalKeys(std::string strAddress)
-{
-    /* 
-    Need function to print public keys for owned addresses
-    
-    */
-    
-    
-    CBitcoinAddress address;
-    if (!address.SetString(strAddress))
-        return 2; // Invalid CinniCoin address
-    
-    CKeyID keyID; // hash of public key
-    if (!address.GetKeyID(keyID))
-        return 3; // Address does not refer to a key
-    
-    CBitcoinAddress testAddr;
-    testAddr.Set(keyID);
-    
-    printf("testAddr comp %s.\n", keyID.ToString().c_str());
-    printf("testAddr comp %s.\n", testAddr.ToString().c_str());
-    
-    CKey key;
-    if (!pwalletMain->GetKey(keyID, key))
-        return 4; // "Private key for address " + strAddress + " is not known"
-    
-    
-    key.SetUnCompressedPubKey();  // let openSSL recover Y coordinate
-    CPubKey pubKey = key.GetPubKey();
-    printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
-    
-    std::string keyb58 = EncodeBase58(pubKey.Raw());
-    printf("keyb58 %s.\n", keyb58.c_str());
-    
-    
-    std::vector<unsigned char> vchTest;
-    DecodeBase58(keyb58, vchTest);
-    CPubKey pubKeyT(vchTest);
-    printf("public key %s.\n", ValueString(pubKeyT.Raw()).c_str());
-    
-   
-    
-    return 0;
-}
 
 int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut)
 {
@@ -422,10 +547,12 @@ int SecureMsgInsertAddress(CKeyID& hashKey, CPubKey& pubKey)
         printf("DB already contains public key for address.\n");
         CPubKey cpkCheck;
         if (!addrpkdb.ReadPK(hashKey, cpkCheck))
+        {
             printf("addrpkdb.Read failed.\n");
-        else
+        } else
         {
             //printf("cpkCheck: %s.\n", ValueString(cpkCheck.Raw()).c_str());
+            //printf("pubKey: %s.\n", ValueString(pubKey.Raw()).c_str());
             if (cpkCheck != pubKey)
                 printf("Existing public key does not match .\n");
         };
@@ -487,7 +614,7 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
     
     keyT.SetCompressedPubKey();
     CPubKey pubKeyT = keyT.GetPubKey();
-    CKeyID ckidT = pubKeyT.GetID();
+    //CKeyID ckidT = pubKeyT.GetID();
     CBitcoinAddress addressT(address);
     printf("addressT %s.\n", addressT.ToString().c_str());
     
@@ -498,6 +625,110 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
     };
     
     return SecureMsgInsertAddress(hashKey, pubKey);
+};
+
+int SecureMsgStore(SecureMessage& smsg)
+{
+    if (fDebug)
+        printf("SecureMsgStore()\n");
+    
+    
+    boost::filesystem::path pathSmsgDir = GetDataDir() / "smsgStore";
+    boost::filesystem::create_directory(pathSmsgDir);
+    
+    boost::filesystem::path fullpath = pathSmsgDir / "01.dat";
+    
+    printf("fullpath.string().c_str() %s.\n", fullpath.string().c_str());
+    
+    {
+        LOCK(cs_smsg);
+        FILE *fp;
+        
+        if (!(fp = fopen(fullpath.string().c_str(), "a")))
+        {
+            printf("Error opening file: %s\n", strerror(errno));
+            return 1;
+        };
+        
+        
+        long int ofs = ftell(fp);
+        
+        if (fwrite(&smsg.hash[0], sizeof(unsigned char), SMSG_HDR_LEN, fp) != SMSG_HDR_LEN
+            || fwrite(smsg.pPayload, sizeof(unsigned char), smsg.nPayload, fp) != smsg.nPayload)
+        {
+            printf("fwrite failed: %s\n", strerror(errno));
+            fclose(fp);
+            return 1;
+        };
+        
+        unsigned char hash[4];
+        //smsgStored.push_back();
+        smsgSend.push_back(SecMsgLocation(smsg.timestamp, hash, ofs));
+        
+        fclose(fp);
+    };
+    
+    return 0;
+};
+
+int SecureMsgRetrieve(SecureMessage& smsg, long int offset)
+{
+    if (fDebug)
+        printf("SecureMsgRetrieve()\n");
+    
+    
+    boost::filesystem::path fullpath = GetDataDir() / "smsgStore/01.dat";
+    
+    printf("fullpath.string().c_str() %s.\n", fullpath.string().c_str());
+    
+    {
+        LOCK(cs_smsg);
+        FILE *fp;
+        
+        if (!(fp = fopen(fullpath.string().c_str(), "r")))
+        {
+            printf("Error opening file: %s\n", strerror(errno));
+            return 1;
+        };
+        
+        //long int ofs = ftell(fp);
+        
+        if (fseek(fp, offset, SEEK_SET) != 0)
+        {
+            printf("fseek, strerror: %s.\n", strerror(errno));
+            fclose(fp);
+            return 1;
+        }
+        
+        if (fread(&smsg.hash[0], sizeof(unsigned char), SMSG_HDR_LEN, fp) != SMSG_HDR_LEN)
+        {
+            printf("fread header failed: %s\n", strerror(errno));
+            fclose(fp);
+            return 1;
+        };
+        
+        printf("smsg.nPayload %d\n", smsg.nPayload);
+        try {
+            smsg.pPayload = new unsigned char[smsg.nPayload];
+        } catch (std::exception& e)
+        {
+            printf("Could not allocate pPayload, exception: %s.\n", e.what());
+            fclose(fp);
+            return 1;
+        };
+        
+        if (fread(smsg.pPayload, sizeof(unsigned char), smsg.nPayload, fp) != smsg.nPayload)
+        {
+            printf("fread data failed: %s\n", strerror(errno));
+            fclose(fp);
+            return 1;
+        };
+        
+        
+        fclose(fp);
+    };
+    
+    return 0;
 };
 
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message)
@@ -723,12 +954,26 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     HMAC_CTX_cleanup(&ctx);
     
+    if (!fHmacOk)
+    {
+        printf("Could not generate MAC.\n");
+        return 1;
+    };
+    
     // todo checksum
+    
+    // todo save random key, to allow outgoing messages to be read.
     
     
     // -- add to message store
     
+    SecureMsgStore(secMesg);
+    //smsgStore.push(secMesg);
     
+    
+    
+    if (fDebug)
+        printf("Secure message sent to %s.\n", addressTo.c_str());
     
     MessageData msg;
     SecureMsgDecrypt(addressTo, secMesg, msg);
@@ -849,6 +1094,12 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
     
     HMAC_CTX_cleanup(&ctx);
     
+    if (!fHmacOk)
+    {
+        printf("Could not generate MAC.\n");
+        return 1;
+    };
+    
     /*
     printf("MAC: ");
     for (int i = 0; i < 32; ++i)
@@ -881,7 +1132,7 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
     {
         // decompress
         
-        if (LZ4_decompress_safe((char*) &vchPayload[1+20+65+4], (char*) &msg.vchMessage[0], lenData, lenPlain) != lenPlain)
+        if (LZ4_decompress_safe((char*) &vchPayload[1+20+65+4], (char*) &msg.vchMessage[0], lenData, lenPlain) != (int) lenPlain)
         {
             printf("Could not decompress message data.\n");
             return 1;
@@ -919,13 +1170,15 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
     memcpy(&vchSig[0], &vchPayload[1+20], 65);
     
     CKey keyFrom;
-    keyFrom.SetCompactSignature(Hash(vchPayload.begin()+1+20+65, vchPayload.end()), vchSig);
+    keyFrom.SetCompactSignature(Hash(vchPayload.begin()+1+20+65+4, vchPayload.end()), vchSig);
     CPubKey cpkFromSig = keyFrom.GetPubKey();
     if (!cpkFromSig.IsValid())
     {
         printf("Signature validation failed.\n");
         return 1;
     };
+    
+    // Need the address for the compressed public key here
     CBitcoinAddress coinAddrFromSig;
     coinAddrFromSig.Set(cpkFromSig.GetID());
     
@@ -934,6 +1187,10 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
         printf("Signature validation failed.\n");
         return 1;
     };
+    
+    // Need the full public key here
+    keyFrom.SetUnCompressedPubKey();
+    cpkFromSig = keyFrom.GetPubKey();
     
     int rv;
     try {
@@ -949,7 +1206,7 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
             printf("Sender public key added to db.\n");
             break;
         case 4:
-            printf("Sender public already in db.\n");
+            printf("Sender public key already in db.\n");
             break;
         default:
             printf("Error adding sender public key to db.\n");
