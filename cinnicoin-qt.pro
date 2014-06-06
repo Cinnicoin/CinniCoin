@@ -204,6 +204,10 @@ HEADERS += src/qt/bitcoingui.h \
     src/netbase.h \
     src/clientversion.h \
     src/emessage.h \
+    src/qt/sendmessagesentry.h \
+    src/qt/sendmessagesdialog.h \
+    src/qt/messagemodel.h \
+    src/emessageClass.h
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -272,7 +276,10 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt_mine.cpp \
     src/pbkdf2.cpp \
     src/emessage.cpp \
-    src/rpcemessage.cpp
+    src/rpcemessage.cpp \
+    src/qt/sendmessagesentry.cpp \
+    src/qt/sendmessagesdialog.cpp \
+    src/qt/messagemodel.cpp
 
 RESOURCES += \
     src/qt/bitcoin.qrc
@@ -289,7 +296,9 @@ FORMS += \
     src/qt/forms/sendcoinsentry.ui \
     src/qt/forms/askpassphrasedialog.ui \
     src/qt/forms/rpcconsole.ui \
-    src/qt/forms/optionsdialog.ui
+    src/qt/forms/optionsdialog.ui \
+    src/qt/forms/sendmessagesentry.ui \
+    src/qt/forms/sendmessagesdialog.ui
 
 contains(USE_QRCODE, 1) {
 HEADERS += src/qt/qrcodedialog.h

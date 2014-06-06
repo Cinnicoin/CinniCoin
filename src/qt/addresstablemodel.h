@@ -20,7 +20,8 @@ public:
 
     enum ColumnIndex {
         Label = 0,   /**< User specified label */
-        Address = 1  /**< Bitcoin address */
+        Address = 1, /**< Bitcoin address */
+        PubKey = 3, /**< Public Key for remote address */
     };
 
     enum RoleIndex {
@@ -59,6 +60,10 @@ public:
     /* Look up label for address in address book, if not found return empty string.
      */
     QString labelForAddress(const QString &address) const;
+
+    /* Look up Public Key for address in address book, if not found return empty string.
+     */
+    QString pubkeyForAddress(const QString &address) const;
 
     /* Look up row index of an address in the model.
        Return -1 if not found.

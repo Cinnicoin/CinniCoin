@@ -8,6 +8,7 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 #include "sendcoinsdialog.h"
+#include "sendmessagesdialog.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
@@ -106,11 +107,13 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     receiveCoinsPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
-    messagePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
-    invoicePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
-    receiptPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    //messagePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    //invoicePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    //receiptPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
     sendCoinsPage = new SendCoinsDialog(this);
+
+    sendMessagesPage = new SendMessagesDialog(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
@@ -120,9 +123,12 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
-    centralWidget->addWidget(messagePage);
-    centralWidget->addWidget(invoicePage);
-    centralWidget->addWidget(receiptPage);
+    centralWidget->addWidget(sendMessagesPage);
+    //centralWidget->addWidget(messagePage);
+    //centralWidget->addWidget(invoicePage);
+    //centralWidget->addWidget(receiptPage);
+    //centralWidget->addWidget(messageAnonPage);
+    //centralWidget->addWidget(sendCoinsAnonPage);
     setCentralWidget(centralWidget);
 
     // Create status bar
@@ -231,23 +237,47 @@ void BitcoinGUI::createActions()
     addressBookAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
     tabGroup->addAction(addressBookAction);
 
-    messageAction = new QAction(QIcon(":/icons/em"), tr("&Encrypted Messaging"), this);
+    sendMessagesAction = new QAction(QIcon(":/icons/em"), tr("Send &Messages"), this);
+    sendMessagesAction->setToolTip(tr("Send Encrypted Messages"));
+    sendMessagesAction->setCheckable(true);
+    sendMessagesAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+    tabGroup->addAction(sendMessagesAction);
+
+    messageAction = new QAction(QIcon(":/icons/em"), tr("Mess&ages"), this);
     messageAction->setToolTip(tr("Encrypted Messaging"));
     messageAction->setCheckable(true);
     messageAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
     tabGroup->addAction(messageAction);
 
-    invoiceAction = new QAction(QIcon(":/icons/address-book"), tr("&Encrypted Invoices"), this);
-    invoiceAction->setToolTip(tr("Invoicing"));
+    invoiceAction = new QAction(QIcon(":/icons/em"), tr("&Invoices"), this);
+    invoiceAction->setToolTip(tr("Encrypted Invoicing"));
     invoiceAction->setCheckable(true);
     invoiceAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
     tabGroup->addAction(invoiceAction);
 
-    receiptAction = new QAction(QIcon(":/icons/address-book"), tr("&Encrypted Receipts"), this);
-    receiptAction->setToolTip(tr("Receipting"));
+    receiptAction = new QAction(QIcon(":/icons/em"), tr("Re&ceipts"), this);
+    receiptAction->setToolTip(tr("Encrypted Receipting"));
     receiptAction->setCheckable(true);
     receiptAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_8));
     tabGroup->addAction(receiptAction);
+
+    sendMessagesAnonAction = new QAction(QIcon(":/icons/em"), tr("S&end Messages"), this);
+    sendMessagesAnonAction->setToolTip(tr("Send Anonymous Message"));
+    sendMessagesAnonAction->setCheckable(true);
+    sendMessagesAnonAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_9));
+    tabGroup->addAction(sendMessagesAnonAction);
+
+    sendCoinsAnonAction = new QAction(QIcon(":/icons/em"), tr("Send co&ins"), this);
+    sendCoinsAnonAction->setToolTip(tr("Send Coins Anonymously"));
+    sendCoinsAnonAction->setCheckable(false); // TODO: Set to true once Anonymous messaging and transactions have been implemented
+    sendCoinsAnonAction->setEnabled(false); // TODO: Remove once Anonymous messaging and transactions have been implemented
+    tabGroup->addAction(sendCoinsAnonAction);
+
+    appAnonAction = new QAction(QIcon(":/icons/em"), tr("A&pplications"), this);
+    appAnonAction->setToolTip(tr("Anonymous Applications"));
+    appAnonAction->setCheckable(false); // TODO: Set to true once Anonymous messaging and transactions have been implemented
+    appAnonAction->setEnabled(false); // TODO: Remove once Anonymous messaging and transactions have been implemented
+    tabGroup->addAction(appAnonAction);
 
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
@@ -259,12 +289,18 @@ void BitcoinGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(addressBookAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(sendMessagesAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(sendMessagesAction, SIGNAL(triggered()), this, SLOT(gotoSendMessagesPage()));
     connect(messageAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(messageAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(messageAction, SIGNAL(triggered()), this, SLOT(gotoMessagesPage()));
     connect(invoiceAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(invoiceAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
     connect(receiptAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(receiptAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(sendCoinsAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(sendCoinsAnonAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(appAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(appAnonAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
 
     quitAction = new QAction(QIcon(":/icons/quit"), tr("E&xit"), this);
     quitAction->setToolTip(tr("Quit application"));
@@ -344,7 +380,7 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
-    QToolBar *toolbar = new QToolBar(tr("Main toolbar"), this);
+    QToolBar *toolbar = new QToolBar("Main toolbar", this);
     addToolBar(Qt::LeftToolBarArea, toolbar);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     toolbar->addAction(overviewAction);
@@ -353,9 +389,28 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(historyAction);
     toolbar->addAction(addressBookAction);
     toolbar->addSeparator();
+
+    QLabel* enc_lbl = new QLabel();
+    enc_lbl->setText("Encryption Suite");
+    enc_lbl->setAlignment(Qt::AlignHCenter);
+
+    toolbar->addWidget(enc_lbl);
+    toolbar->addAction(sendMessagesAction);
     toolbar->addAction(messageAction);
     toolbar->addAction(invoiceAction);
     toolbar->addAction(receiptAction);
+    toolbar->addSeparator();
+
+    QLabel* anon_lbl = new QLabel();
+    anon_lbl->setText("Anonymous Suite");
+    anon_lbl->setAlignment(Qt::AlignHCenter);
+
+    toolbar->addWidget(anon_lbl);
+
+    toolbar->addAction(sendMessagesAnonAction);
+    toolbar->addAction(sendCoinsAnonAction);
+    toolbar->addAction(appAnonAction);
+
     toolbar->addSeparator();
     toolbar->addAction(exportAction);
 
@@ -758,6 +813,24 @@ void BitcoinGUI::gotoSendCoinsPage()
 {
     sendCoinsAction->setChecked(true);
     centralWidget->setCurrentWidget(sendCoinsPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+}
+
+void BitcoinGUI::gotoSendMessagesPage()
+{
+    sendMessagesAction->setChecked(true);
+    centralWidget->setCurrentWidget(sendMessagesPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+}
+
+void BitcoinGUI::gotoMessagesPage()
+{
+    messageAction->setChecked(true);
+    centralWidget->setCurrentWidget(messagePage);
 
     exportAction->setEnabled(false);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);

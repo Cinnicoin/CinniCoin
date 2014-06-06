@@ -7,9 +7,10 @@
 namespace Ui {
     class SendMessagesDialog;
 }
-class WalletModel;
+
+class MessageModel;
 class SendMessagesEntry;
-class SendCoinsRecipient;
+class SendMessagesRecipient;
 
 QT_BEGIN_NAMESPACE
 class QUrl;
@@ -24,13 +25,13 @@ public:
     explicit SendMessagesDialog(QWidget *parent = 0);
     ~SendMessagesDialog();
 
-    void setModel(WalletModel *model);
+    void setModel(MessageModel *model);
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */
     QWidget *setupTabChain(QWidget *prev);
 
-    void pasteEntry(const SendCoinsRecipient &rv);
+    void pasteEntry(const SendMessagesRecipient &rv);
     bool handleURI(const QString &uri);
 
 public slots:
@@ -39,31 +40,16 @@ public slots:
     void accept();
     SendMessagesEntry *addEntry();
     void updateRemoveEnabled();
-    void setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
 
 private:
     Ui::SendMessagesDialog *ui;
-    WalletModel *model;
+    MessageModel *model;
     bool fNewRecipientAllowed;
 
 private slots:
     void on_sendButton_clicked();
     void removeEntry(SendMessagesEntry* entry);
-    void updateDisplayUnit();
 
-    void coinControlFeatureChanged(bool);
-    void coinControlButtonClicked();
-    void coinControlChangeChecked(int);
-    void coinControlChangeEdited(const QString &);
-    void coinControlUpdateLabels();
-    void coinControlClipboardQuantity();
-    void coinControlClipboardAmount();
-    void coinControlClipboardFee();
-    void coinControlClipboardAfterFee();
-    void coinControlClipboardBytes();
-    void coinControlClipboardPriority();
-    void coinControlClipboardLowOutput();
-    void coinControlClipboardChange(); 
 };
 
 #endif // SENDMESSAGESDIALOG_H
