@@ -1,0 +1,4 @@
+#ifndef MESSAGEMODEL_H
+#define MESSAGEMODEL_H
+
+#endif // MESSAGEMODEL_H
