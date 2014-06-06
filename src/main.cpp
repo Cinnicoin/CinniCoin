@@ -3798,7 +3798,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         if (!vGetData.empty())
             pto->PushMessage("getdata", vGetData);
         
-        
         SecureMsgSendData(pto, fSendTrickle); // should be in cs_main?
     }
     

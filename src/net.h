@@ -18,7 +18,7 @@
 #include "netbase.h"
 #include "protocol.h"
 #include "addrman.h"
-#include "emessageClass.h"
+#include "emessageclass.h"
 
 class CRequestTracker;
 class CNode;

@@ -54,28 +54,6 @@ Value smsgaddkey(const Array& params, bool fHelp)
     return result;
 }
 
-Value smsgsend(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 3)
-        throw runtime_error(
-            "smsgsend <addrFrom> <addrTo> <message>\n"
-            "Send an encrypted message from addrFrom to addrTo.");
-
-    std::string addrFrom  = params[0].get_str();
-    std::string addrTo    = params[1].get_str();
-    std::string msg       = params[2].get_str();
-    
-    
-    Object result;
-    
-    if (SecureMsgSend(addrFrom, addrTo, msg) != 0)
-        result.push_back(Pair("result", "Send failed."));
-    else
-        result.push_back(Pair("result", "Sent."));
-
-    return result;
-}
-
 Value smsggetlocalpubkey(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -115,3 +93,49 @@ Value smsggetlocalpubkey(const Array& params, bool fHelp)
 
     return result;
 }
+
+Value smsgsend(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 3)
+        throw runtime_error(
+            "smsgsend <addrFrom> <addrTo> <message>\n"
+            "Send an encrypted message from addrFrom to addrTo.");
+
+    std::string addrFrom  = params[0].get_str();
+    std::string addrTo    = params[1].get_str();
+    std::string msg       = params[2].get_str();
+    
+    
+    Object result;
+    
+    if (SecureMsgSend(addrFrom, addrTo, msg) != 0)
+        result.push_back(Pair("result", "Send failed."));
+    else
+        result.push_back(Pair("result", "Sent."));
+
+    return result;
+}
+
+Value smsgsendanon(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+            "smsgsendanon <addrTo> <message>\n"
+            "Send an anonymous encrypted message to addrTo.");
+    
+    std::string addrFrom  = "anon";
+    std::string addrTo    = params[0].get_str();
+    std::string msg       = params[1].get_str();
+    
+    
+    Object result;
+    
+    if (SecureMsgSend(addrFrom, addrTo, msg) != 0)
+        result.push_back(Pair("result", "Send failed."));
+    else
+        result.push_back(Pair("result", "Sent."));
+
+    return result;
+}
+
+

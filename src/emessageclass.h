@@ -8,6 +8,9 @@
 // 4 + 1 + 8 + 20 + 16 + 33 + 32 + 4
 const int SMSG_HDR_LEN = 118;
 
+// length of encrypted header in payload
+const int SMSG_PL_HDR_LEN = 1+20+65+4;
+
 
 #pragma pack(1)
 class SecureMessage
@@ -35,7 +38,7 @@ public:
     */
     unsigned char   hash[4];
     unsigned char   version;
-    uint64_t        timestamp;
+    int64_t         timestamp;
     unsigned char   destHash[20];
     unsigned char   iv[16];
     unsigned char   cpkR[33];
@@ -51,26 +54,43 @@ class MessageData
 {
 // Decrypted SecureMessage data
 public:
-    uint64_t                    timestamp;
+    int64_t                     timestamp;
     std::vector<unsigned char>  vchToAddress;
     std::vector<unsigned char>  vchFromAddress;
     std::vector<unsigned char>  vchMessage; // null terminated
 };
 
-
-class SecMsgLocation
+class SecMsgToken
 {
 public:
-    SecMsgLocation(){};
-    SecMsgLocation(uint64_t ts, unsigned char* hsh, long int ofs)
+    SecMsgToken(int64_t ts, unsigned char* p, int np, long int o)
     {
         timestamp = ts;
-        //hash
-        offset = ofs;
+        // payload will always be > 8, just make sure
+        if (np < 8)
+            memset(sample, 0, 8);
+        else
+            memcpy(sample, p, 8);
+        offset = o;
     };
-    uint64_t                    timestamp;
-    unsigned char               hash[4];
-    long int                    offset;
+    
+    SecMsgToken() {};
+    
+    ~SecMsgToken() {};
+    
+    //bool operator <(SecMsgToken const& x, SecMsgToken const& y)
+    bool operator <(const SecMsgToken & y) const
+    {
+        // pack and memcmp from timesent?
+        if (timestamp == y.timestamp)
+            return memcmp(sample, y.sample, 8) < 0;
+        return timestamp < y.timestamp;
+    }
+    
+    int64_t                     timestamp;    // doesn't need to be full 64 bytes?
+    unsigned char               sample[8];    // first 8 bytes of payload - a hash
+    long int                    offset;       // offset
+    
 };
 
 
@@ -86,10 +106,9 @@ public:
     
     ~SecMsgNode() {};
     
-    uint64_t                    lastSeen;
+    int64_t                     lastSeen;
     bool                        enabled;
     
 };
-
 
 #endif // CINNICOIN_EMESSAGE_CLASS_H

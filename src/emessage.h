@@ -8,9 +8,16 @@
 #include "net.h"
 #include "wallet.h"
 #include "db.h"
-#include "emessageClass.h"
+#include "emessageclass.h"
 
-// -- just get at the data
+const int SMSG_BUCKET_LEN = 60 * 5; // in seconds
+//const int SMSG_RETENTION  = 60 * 60 * 1; // in seconds
+const int SMSG_RETENTION  = 60 * 30 * 1; // in seconds
+
+extern std::map<int64_t, std::set<SecMsgToken> > smsgSets;
+
+
+// -- get at the data
 class CBitcoinAddress_B : public CBitcoinAddress
 {
 public:
@@ -106,9 +113,15 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle);
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart);
 bool SecureMsgScanBlockChain();
 
+int SecureMsgScanMessages();
+
 int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
+
+int SecureMsgTransmit(CNode* pto, SecMsgToken &token);
+
+int SecureMsgReceive(std::vector<unsigned char>& vchData);
 int SecureMsgStore(SecureMessage& smsg);
 int SecureMsgRetrieve(SecureMessage& smsg, long int offset);
 
