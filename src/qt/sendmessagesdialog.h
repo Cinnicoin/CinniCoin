@@ -39,7 +39,6 @@ public:
     QWidget *setupTabChain(QWidget *prev);
 
     void pasteEntry(const SendMessagesRecipient &rv);
-    //bool handleURI(const QString &uri);
 
 public slots:
     void clear();
@@ -59,7 +58,6 @@ private slots:
     void removeEntry(SendMessagesEntry* entry);
     void on_addressBookButton_clicked();
     void on_pasteButton_clicked();
-
 };
 
 #endif // SENDMESSAGESDIALOG_H

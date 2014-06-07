@@ -122,8 +122,6 @@ void SendMessagesEntry::on_deleteButton_clicked()
 
 bool SendMessagesEntry::validate()
 {
-    // Check input validity
-    bool retval = true;
 
     if(ui->messageText->toPlainText() == "")
     {

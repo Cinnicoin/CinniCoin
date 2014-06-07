@@ -8,12 +8,12 @@
 
 class CMessage;
 class CWallet;
+class WalletModel;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
 QT_END_NAMESPACE
 
-class WalletModel;
 class SendMessagesRecipient
 {
 public:
@@ -65,14 +65,11 @@ public:
     SendMessagesReturn sendMessages(const QList<SendMessagesRecipient> &recipients, const QString &addressFrom);
 
 private:
-//    /CMessage *message;
     CWallet *wallet;
     QTimer *pollTimer;
 
     WalletModel *walletModel;
 
-    //void subscribeToCoreSignals();
-    //void unsubscribeFromCoreSignals();
 
 public slots:
 
