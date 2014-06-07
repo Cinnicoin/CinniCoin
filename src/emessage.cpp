@@ -33,15 +33,8 @@ Notes:
 #include "lz4/lz4.h"
 #include "lz4/lz4.c"
 
-//std::vector<SecureMessage> smsgStore; // temporary
-
-//std::vector<SecureMessage*> smsgUnsent;
-
-
-
-//std::vector<SecMsgLocation> smsgSend; // temporary
-
-//std::vector<SecMsgLocation> smsgStored; // move to db?
+//#include "xxhash/xxhash.h"
+//#include "xxhash/xxhash.c"
 
 // TODO: For buckets older than current, only need to store length and hash in memory
 // TODO: move set into a class then can add timeChanged, hash etc.
@@ -609,7 +602,6 @@ bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
     
     // public keys are in txin.scriptSig
     // matching addresses are in scriptPubKey of txin's referenced output
-    throw std::runtime_error("test throw");
     
     uint32_t nBlocks = 0;
     uint32_t nTransactions = 0;
@@ -633,7 +625,7 @@ bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
             
             /*
             Look at the inputs of every tx.
-            If the inputs are standard, get the pubkey from scriptsig and uncompress it
+            If the inputs are standard, get the pubkey from scriptsig and
             look for the corresponding output (the input(output of other tx) to the input of this tx)
             get the address from scriptPubKey
             add to db if address is unique.
@@ -668,10 +660,17 @@ bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
                         
                         //key.Reset();
                         key.SetPubKey(vch);
-                        // EC_KEY_set_conv_form(key->k, POINT_CONVERSION_UNCOMPRESSED); // y^2 = x^3 + 7
-                        key.SetUnCompressedPubKey();  // let openSSL recover Y coordinate
-                        CPubKey uncPubKey = key.GetPubKey();
-                        //printf("uncompressed public key %s.\n", ValueString(uncPubKey.Raw()).c_str());
+                        
+                        key.SetCompressedPubKey(); // ensure key is compressed
+                        CPubKey pubKey = key.GetPubKey();
+                        //printf("compressed public key %s.\n", ValueString(pubKey.Raw()).c_str());
+                        
+                        if (!pubKey.IsValid()
+                            || !pubKey.IsCompressed())
+                        {
+                            printf("Public key is invalid %s.\n", ValueString(pubKey.Raw()).c_str());
+                            continue;
+                        };
                         
                         prevoutHash = tx.vin[i].prevout.hash;
                         CTransaction txOfPrevOutput;
@@ -730,7 +729,7 @@ bool ScanChainForPublicKeys(CBlockIndex* pindexStart)
                             break;
                         };
                         
-                        if (!addrpkdb.WritePK(hashKey, uncPubKey))
+                        if (!addrpkdb.WritePK(hashKey, pubKey))
                         {
                             printf("Write pair failed: %s.\n", coinAddress.ToString().c_str());
                             break;
@@ -820,9 +819,18 @@ int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
     if (!pwalletMain->GetKey(keyID, key))
         return 4;
     
-    key.SetUnCompressedPubKey();  // let openSSL recover Y coordinate
+    key.SetCompressedPubKey(); // make sure key is compressed
+    
     CPubKey pubKey = key.GetPubKey();
-    printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
+    if (!pubKey.IsValid()
+        || !pubKey.IsCompressed())
+    {
+        printf("Public key is invalid %s.\n", ValueString(pubKey.Raw()).c_str());
+        return 1;
+    };
+    
+    
+    //printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
     strPublicKey = EncodeBase58(pubKey.Raw());
     
     //std::string keyb58 = EncodeBase58(pubKey.Raw());
@@ -939,6 +947,7 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
     
     keyT.SetCompressedPubKey();
     CPubKey pubKeyT = keyT.GetPubKey();
+    
     //CKeyID ckidT = pubKeyT.GetID();
     CBitcoinAddress addressT(address);
     printf("addressT %s.\n", addressT.ToString().c_str());
@@ -1295,21 +1304,20 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     // -- Generate a new random EC key pair with private key called r and public key called R.
     
     CKey keyR;
-    keyR.MakeNewKey(false); // make uncompressed key
+    keyR.MakeNewKey(true); // make compressed key
     
     // -- Do an EC point multiply with public key K and private key r. This gives you public key P. 
     
-    //printf("cpkK: %s.\n", ValueString(cpkK.Raw()).c_str());
+    //printf("cpkDestK: %s.\n", ValueString(cpkDestK.Raw()).c_str());
     CKey keyK;
-    keyK.SetUnCompressedPubKey();
     if (!keyK.SetPubKey(cpkDestK))
     {
         printf("Could not set pubkey for K: %s.\n", ValueString(cpkDestK.Raw()).c_str());
         return 1;
     };
     
-    std::vector<unsigned char> vch;
-    vch.resize(32);
+    std::vector<unsigned char> vchP;
+    vchP.resize(32);
     EC_KEY* pkeyr = keyR.GetECKey();
     EC_KEY* pkeyK = keyK.GetECKey();
     
@@ -1318,8 +1326,9 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     //int secret_len = (field_size+7)/8;
     //printf("secret_len %d.\n", secret_len);
     
+    // ECDH_compute_key returns the same P if fed compressed or uncompressed public keys
     ECDH_set_method(pkeyr, ECDH_OpenSSL());
-    int lenP = ECDH_compute_key(&vch[0], 32, EC_KEY_get0_public_key(pkeyK), pkeyr, NULL);
+    int lenP = ECDH_compute_key(&vchP[0], 32, EC_KEY_get0_public_key(pkeyK), pkeyr, NULL);
     
     if (lenP != 32)
     {
@@ -1327,9 +1336,11 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
         return 1;
     };
     
-    // Compress pubkey R to save bytes
-    keyR.SetCompressedPubKey();
+    //printf("lenP: %d.\n", lenP);
+    //printf("P: %s.\n", ValueString(vchP).c_str());
+    
     CPubKey cpkR = keyR.GetPubKey();
+    printf("cpkR: %s.\n", ValueString(cpkR.Raw()).c_str());
     if (!cpkR.IsValid()
         || !cpkR.IsCompressed())
     {
@@ -1340,9 +1351,6 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     //printf("compressed cpkR %s.\n", ValueString(cpkR.Raw()).c_str());
     memcpy(secMesg.cpkR, &cpkR.Raw()[0], 33);
     
-    printf("lenP: %d.\n", lenP);
-    printf("P: %s.\n", ValueString(vch).c_str());
-    
     
     // -- Use public key P and calculate the SHA512 hash H. 
     
@@ -1350,7 +1358,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     vchHashed.resize(64); // 512
     
     // X component where?, is ECDH_compute_key returning a compressed key? could be as it's only 32 bytes
-    SHA512(&vch[0], vch.size(), (unsigned char*)&vchHashed[0]);
+    SHA512(&vchP[0], vchP.size(), (unsigned char*)&vchHashed[0]);
     //printf("SHA512(P): %s.\n", ValueString(vchHashed).c_str());
     
     // -- The first 32 bytes of H are called key_e and the last 32 bytes are called key_m.
@@ -1544,12 +1552,11 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
     };
     
     //printf("compressed cpkR %s.\n", ValueString(cpkR.Raw()).c_str());
-    keyR.SetUnCompressedPubKey();
     cpkR = keyR.GetPubKey();
     if (!cpkR.IsValid()
-        || cpkR.IsCompressed())
+        || !cpkR.IsCompressed())
     {
-        printf("Could not get uncompressed public key for key R.\n");
+        printf("Could not get compressed public key for key R.\n");
         return 1;
     };
     
@@ -1722,8 +1729,6 @@ int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg
             return 1;
         };
         
-        // Need the full public key here
-        keyFrom.SetUnCompressedPubKey();
         cpkFromSig = keyFrom.GetPubKey();
         
         int rv = 5;

@@ -74,7 +74,7 @@ Value smsggetlocalpubkey(const Array& params, bool fHelp)
         case 0:
             result.push_back(Pair("result", "Success."));
             result.push_back(Pair("address", address));
-            result.push_back(Pair("full public key", publicKey));
+            result.push_back(Pair("compressed public key", publicKey));
             break;
         case 1:
             result.push_back(Pair("result", "Failed."));
