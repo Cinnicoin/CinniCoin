@@ -12,27 +12,33 @@ class MessageModel;
 class SendMessagesEntry;
 class SendMessagesRecipient;
 
-QT_BEGIN_NAMESPACE
-class QUrl;
-QT_END_NAMESPACE
+//QT_BEGIN_NAMESPACE
+//class QUrl;
+//QT_END_NAMESPACE
 
-/** Dialog for sending bitcoins */
+/** Dialog for sending messages */
 class SendMessagesDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit SendMessagesDialog(QWidget *parent = 0);
+
+    enum Mode {
+        Encrypted,
+        Anonymous
+    };
+
+    explicit SendMessagesDialog(Mode mode, QWidget *parent = 0);
     ~SendMessagesDialog();
 
-    void setModel(MessageModel *model);
+    void setModel (MessageModel *model);
+    bool checkMode(Mode mode);
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */
     QWidget *setupTabChain(QWidget *prev);
 
     void pasteEntry(const SendMessagesRecipient &rv);
-    bool handleURI(const QString &uri);
 
 public slots:
     void clear();
@@ -45,11 +51,13 @@ private:
     Ui::SendMessagesDialog *ui;
     MessageModel *model;
     bool fNewRecipientAllowed;
+    Mode mode;
 
 private slots:
     void on_sendButton_clicked();
     void removeEntry(SendMessagesEntry* entry);
-
+    void on_addressBookButton_clicked();
+    void on_pasteButton_clicked();
 };
 
 #endif // SENDMESSAGESDIALOG_H

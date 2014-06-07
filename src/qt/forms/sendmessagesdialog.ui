@@ -90,20 +90,6 @@
           </property>
          </widget>
         </item>
-        <item>
-         <widget class="QToolButton" name="deleteButton">
-          <property name="toolTip">
-           <string>Remove this recipient</string>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-          <property name="icon">
-           <iconset resource="../bitcoin.qrc">
-            <normaloff>:/icons/remove</normaloff>:/icons/remove</iconset>
-          </property>
-         </widget>
-        </item>
        </layout>
       </item>
      </layout>

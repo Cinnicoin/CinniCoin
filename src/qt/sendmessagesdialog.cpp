@@ -1,12 +1,12 @@
 #include "sendmessagesdialog.h"
 #include "ui_sendmessagesdialog.h"
-#include "init.h"
+//#include "init.h"
+#include "walletmodel.h"
 #include "messagemodel.h"
 #include "addressbookpage.h"
-//#include "optionsmodel.h"
+#include "optionsmodel.h"
 #include "sendmessagesentry.h"
-#include "guiutil.h"
-#include "askpassphrasedialog.h"
+//#include "guiutil.h"
 
 #include <QMessageBox>
 #include <QLocale>
@@ -14,10 +14,11 @@
 #include <QScrollBar>
 #include <QClipboard>
 
-SendMessagesDialog::SendMessagesDialog(QWidget *parent) :
+SendMessagesDialog::SendMessagesDialog(Mode mode, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::SendMessagesDialog),
-    model(0)
+    model(0),
+    mode(mode)
 {
 
     ui->setupUi(this);
@@ -30,7 +31,8 @@ SendMessagesDialog::SendMessagesDialog(QWidget *parent) :
 
 #if QT_VERSION >= 0x040700
      /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-     ui->addressFrom->setPlaceholderText(tr("Entry one of your Cinnicoin Addresses"));
+    if(mode == SendMessagesDialog::Encrypted)
+        ui->addressFrom->setPlaceholderText(tr("Entry one of your Cinnicoin Addresses"));
  #endif
     addEntry();
 
@@ -38,6 +40,9 @@ SendMessagesDialog::SendMessagesDialog(QWidget *parent) :
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
 
     fNewRecipientAllowed = true;
+
+    if(mode == SendMessagesDialog::Anonymous)
+        ui->frameAddressFrom->hide();
 }
 
 void SendMessagesDialog::setModel(MessageModel *model)
@@ -47,14 +52,44 @@ void SendMessagesDialog::setModel(MessageModel *model)
     for(int i = 0; i < ui->entries->count(); ++i)
     {
         SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
+
         if(entry)
             entry->setModel(model);
     }
 }
 
+bool SendMessagesDialog::checkMode(Mode mode)
+{
+    return (mode == this->mode);
+}
+
 SendMessagesDialog::~SendMessagesDialog()
 {
     delete ui;
+}
+
+void SendMessagesDialog::on_pasteButton_clicked()
+{
+    // Paste text from clipboard into recipient field
+    ui->addressFrom->setText(QApplication::clipboard()->text());
+}
+
+void SendMessagesDialog::on_addressBookButton_clicked()
+{
+    if(!model)
+        return;
+
+    AddressBookPage dlg(AddressBookPage::ForSending, AddressBookPage::ReceivingTab, this);
+
+    dlg.setModel(model->getWalletModel()->getAddressTableModel());
+
+    if(dlg.exec())
+    {
+        ui->addressFrom->setText(dlg.getReturnValue());
+        SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(0)->widget());
+        entry->setFocus();
+               // findChild( const QString "sentTo")->setFocus();
+    }
 }
 
 void SendMessagesDialog::on_sendButton_clicked()
@@ -64,7 +99,7 @@ void SendMessagesDialog::on_sendButton_clicked()
 
     if(!model)
         return;
-	
+
     for(int i = 0; i < ui->entries->count(); ++i)
     {
         SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
@@ -101,7 +136,11 @@ void SendMessagesDialog::on_sendButton_clicked()
     }
 
     MessageModel::SendMessagesReturn sendstatus;
-    sendstatus = model->sendMessages(recipients);
+
+    if(mode == SendMessagesDialog::Anonymous)
+        sendstatus = model->sendMessages(recipients);
+    else
+        sendstatus = model->sendMessages(recipients, ui->addressFrom->text());
 
     switch(sendstatus.status)
     {

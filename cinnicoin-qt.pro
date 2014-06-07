@@ -28,7 +28,6 @@ BDB_INCLUDE_PATH=c:/deps/db/build_unix
 BDB_LIB_PATH=c:/deps/db/build_unix
 OPENSSL_INCLUDE_PATH=c:/deps/ssl/include
 OPENSSL_LIB_PATH=c:/deps/ssl
-
 OBJECTS_DIR = build
 MOC_DIR = build
 UI_DIR = build
@@ -207,7 +206,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/sendmessagesentry.h \
     src/qt/sendmessagesdialog.h \
     src/qt/messagemodel.h \
-    src/emessageClass.h
+    src/emessageclass.h \
+    src/qt/qvalidatedtextedit.h
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -279,7 +279,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/rpcemessage.cpp \
     src/qt/sendmessagesentry.cpp \
     src/qt/sendmessagesdialog.cpp \
-    src/qt/messagemodel.cpp
+    src/qt/messagemodel.cpp \
+    src/qt/qvalidatedtextedit.cpp
 
 RESOURCES += \
     src/qt/bitcoin.qrc
