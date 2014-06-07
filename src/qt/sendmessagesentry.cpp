@@ -2,8 +2,8 @@
 #include "ui_sendmessagesentry.h"
 #include "guiutil.h"
 #include "addressbookpage.h"
-#include "messagemodel.h"
 #include "walletmodel.h"
+#include "messagemodel.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 
@@ -122,6 +122,8 @@ void SendMessagesEntry::on_deleteButton_clicked()
 
 bool SendMessagesEntry::validate()
 {
+    // Check input validity
+    bool retval = true;
 
     if(ui->messageText->toPlainText() == "")
     {
