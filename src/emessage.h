@@ -109,7 +109,6 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
 bool SecureMsgSendData(CNode* pto, bool fSendTrickle);
 
 
-
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart);
 bool SecureMsgScanBlockChain();
 
@@ -117,8 +116,8 @@ int SecureMsgScanMessages();
 
 int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
 
+int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
-
 
 int SecureMsgTransmit(CNode* pto, SecMsgToken &token);
 

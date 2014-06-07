@@ -165,7 +165,6 @@ SendMessagesRecipient SendMessagesEntry::getValue()
 
 QWidget *SendMessagesEntry::setupTabChain(QWidget *prev)
 {
-
     QWidget::setTabOrder(prev, ui->sendTo);
     QWidget::setTabOrder(ui->sendTo, ui->addressBookButton);
     QWidget::setTabOrder(ui->addressBookButton, ui->pasteButton);

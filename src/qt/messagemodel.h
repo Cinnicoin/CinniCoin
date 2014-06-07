@@ -8,16 +8,10 @@
 
 class CMessage;
 class CWallet;
-//class CKeyID;
-//class CPubKey;
-//class COutput;
-//class COutPoint;
-//class uint256;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
 QT_END_NAMESPACE
-
 
 class WalletModel;
 class SendMessagesRecipient

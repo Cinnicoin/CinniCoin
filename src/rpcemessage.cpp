@@ -54,6 +54,46 @@ Value smsgaddkey(const Array& params, bool fHelp)
     return result;
 }
 
+Value smsggetlocalpubkey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "smsggetlocalpubkey <address>\n"
+            "Return the uncompressed public key for an address in your wallet.");
+
+    std::string address   = params[0].get_str();
+    std::string publicKey;
+    
+    
+    int rv = GetLocalPublicKey(address, publicKey);
+    
+    Object result;
+    
+    switch (rv)
+    {
+        case 0:
+            result.push_back(Pair("result", "Success."));
+            result.push_back(Pair("address", address));
+            result.push_back(Pair("full public key", publicKey));
+            break;
+        case 1:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Error."));
+            break;
+        case 2:
+        case 3:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Invalid address."));
+            break;
+        case 4:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Address not found in wallet."));
+            break;
+    };
+
+    return result;
+}
+
 Value smsgsend(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 3)

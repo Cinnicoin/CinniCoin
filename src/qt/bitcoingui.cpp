@@ -844,7 +844,6 @@ void BitcoinGUI::gotoSendCoinsPage()
 
 void BitcoinGUI::gotoSendMessagesPage()
 {
-
     sendMessagesAction->setChecked(true);
     centralWidget->setCurrentWidget(sendMessagesPage);
 

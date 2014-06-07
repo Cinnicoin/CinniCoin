@@ -1,8 +1,8 @@
-#include "messagemodel.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 #include "walletmodel.h"
+#include "messagemodel.h"
 
 #include "ui_interface.h"
 #include "emessage.h"
@@ -31,7 +31,6 @@ MessageModel::~MessageModel()
 
 int MessageModel::getNumReceivedMessages() const
 {
-
     int numMessages = 0;
     {
         //LOCK(message->cs_message);
@@ -131,4 +130,3 @@ WalletModel *MessageModel::getWalletModel()
 {
     return walletModel;
 }
-
