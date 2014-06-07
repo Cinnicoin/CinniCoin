@@ -27,7 +27,6 @@ public:
     QString label;
     QString pubkey;
     QString message;
-
 };
 
 /** Interface to Cinnicoin Secure Messaging from Qt view code. */
@@ -38,8 +37,6 @@ class MessageModel : public QObject
 public:
     explicit MessageModel(CWallet *wallet, QObject *parent = 0);
     ~MessageModel();
-
-    WalletModel *walletModel;
 
     enum StatusCode // Returned by sendMessages
     {
@@ -52,12 +49,12 @@ public:
         Aborted
     };
 
+    WalletModel *getWalletModel();
+
     int getNumReceivedMessages() const;
     int getNumSentMessages() const;
     int getNumUnreadMessages() const;
-
-    // Check address for validity
-    //bool validateAddress(const QString &address);
+    bool getAddressOrPubkey( QString &Address,  QString &Pubkey) const;
 
     // Return status record for SendMessages, contains error id + information
     struct SendMessagesReturn
@@ -71,11 +68,14 @@ public:
 
     // Send messages to a list of recipients
     SendMessagesReturn sendMessages(const QList<SendMessagesRecipient> &recipients);
+    SendMessagesReturn sendMessages(const QList<SendMessagesRecipient> &recipients, const QString &addressFrom);
 
 private:
 //    /CMessage *message;
     CWallet *wallet;
     QTimer *pollTimer;
+
+    WalletModel *walletModel;
 
     //void subscribeToCoreSignals();
     //void unsubscribeFromCoreSignals();

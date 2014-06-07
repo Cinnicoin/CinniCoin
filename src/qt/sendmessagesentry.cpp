@@ -1,12 +1,13 @@
 #include "sendmessagesentry.h"
 #include "ui_sendmessagesentry.h"
 #include "guiutil.h"
-#include "bitcoinunits.h"
 #include "addressbookpage.h"
 #include "messagemodel.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
+
+#include "emessage.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -23,9 +24,10 @@ SendMessagesEntry::SendMessagesEntry(QWidget *parent) :
 #endif
 #if QT_VERSION >= 0x040700
     /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-    ui->publicKey->setPlaceholderText(tr("Enter a label for this address to add it to your address book"));
     ui->sendTo->setPlaceholderText(tr("Enter a valid CinniCoin address"));
-    ui->addAsLabel->setPlaceholderText(tr("Enter the public key for the address above, it is not in the blockchain"));
+    ui->addAsLabel->setPlaceholderText(tr("Enter a label for this address to add it to your address book"));
+    ui->publicKey->setPlaceholderText(tr("Enter the public key for the address above, it is not in the blockchain"));
+    ui->messageText->setErrorText(tr("You cannot send a blank message!"));
 #endif
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(ui->sendTo);
@@ -51,12 +53,17 @@ void SendMessagesEntry::on_addressBookButton_clicked()
 
     AddressBookPage dlg(AddressBookPage::ForSending, AddressBookPage::SendingTab, this);
 
-    dlg.setModel(model->walletModel->getAddressTableModel());
+    dlg.setModel(model->getWalletModel()->getAddressTableModel());
 
     if(dlg.exec())
     {
+
         ui->sendTo->setText(dlg.getReturnValue());
-        ui->messageText->setFocus();
+
+        if(ui->publicKey->text() == "")
+            ui->publicKey->setFocus();
+        else
+            ui->messageText->setFocus();
     }
 }
 
@@ -65,8 +72,22 @@ void SendMessagesEntry::on_sendTo_textChanged(const QString &address)
     if(!model)
         return;
 
+    QString pubkey;
+    QString sendTo = address;
+
+    if(model->getAddressOrPubkey(sendTo, pubkey))
+    {
+
+        ui->publicKey->setText(pubkey);
+    }
+    else
+    {
+        ui->publicKey->show();
+        ui->publicKeyLabel->show();
+    }
+
     // Fill in label from address book, if address has an associated label
-    QString associatedLabel = wallet->getAddressTableModel()->labelForAddress(address);
+    QString associatedLabel = model->getWalletModel()->getAddressTableModel()->labelForAddress(address);
 
     if(!associatedLabel.isEmpty())
         ui->addAsLabel->setText(associatedLabel);
@@ -76,9 +97,6 @@ void SendMessagesEntry::setModel(MessageModel *model)
 {
 
     this->model = model;
-
-    if(model && model->walletModel && model->walletModel->getOptionsModel())
-        connect(ui->messageText, SIGNAL(textChanged()), this, SIGNAL(messageTextChanged()));
 
     clear();
 }
@@ -101,23 +119,35 @@ void SendMessagesEntry::on_deleteButton_clicked()
     emit removeEntry(this);
 }
 
+
 bool SendMessagesEntry::validate()
 {
+    // Check input validity
+    bool retval = true;
 
     if(ui->messageText->toPlainText() == "")
     {
-        // Cannot send a blank message
-        //ui->messageText->setValid(false);
-        return false;
+        ui->messageText->setValid(false);
+
+        retval = false;
     }
 
-    if(!ui->sendTo->hasAcceptableInput() || (model->walletModel->validateAddress(ui->sendTo->text())))
+    if(!ui->sendTo->hasAcceptableInput() || (!model->getWalletModel()->validateAddress(ui->sendTo->text())))
     {
-        //ui->sendTo->setValid(false);
-        return false;
+        ui->sendTo->setValid(false);
+
+        retval = false;
     }
 
-    return true;
+    if(ui->publicKey->text() == "")
+    {
+        ui->publicKey->setValid(false);
+        ui->publicKey->show();
+
+        retval = false;
+    }
+
+    return retval;
 }
 
 SendMessagesRecipient SendMessagesEntry::getValue()
@@ -135,15 +165,17 @@ SendMessagesRecipient SendMessagesEntry::getValue()
 
 QWidget *SendMessagesEntry::setupTabChain(QWidget *prev)
 {
-    /*
+
     QWidget::setTabOrder(prev, ui->sendTo);
     QWidget::setTabOrder(ui->sendTo, ui->addressBookButton);
     QWidget::setTabOrder(ui->addressBookButton, ui->pasteButton);
     QWidget::setTabOrder(ui->pasteButton, ui->deleteButton);
     QWidget::setTabOrder(ui->deleteButton, ui->addAsLabel);
-    */
+    QWidget::setTabOrder(ui->addAsLabel, ui->publicKey);
+    QWidget::setTabOrder(ui->publicKey, ui->messageText);
 
-    //return ui->messageText->setupTabChain(ui->addAsLabel);
+    return ui->messageText;
+
 }
 
 void SendMessagesEntry::setValue(const SendMessagesRecipient &value)

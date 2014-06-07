@@ -14,6 +14,7 @@
 #include "aboutdialog.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
+#include "messagemodel.h"
 #include "editaddressdialog.h"
 #include "optionsmodel.h"
 #include "transactiondescdialog.h"
@@ -63,6 +64,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
     clientModel(0),
     walletModel(0),
+    messageModel(0),
     encryptWalletAction(0),
     changePassphraseAction(0),
     aboutQtAction(0),
@@ -113,7 +115,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     sendCoinsPage = new SendCoinsDialog(this);
 
-    sendMessagesPage = new SendMessagesDialog(this);
+    sendMessagesPage     = new SendMessagesDialog(SendMessagesDialog::Encrypted, this);
+    sendMessagesAnonPage = new SendMessagesDialog(SendMessagesDialog::Anonymous, this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 
@@ -124,6 +127,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(receiveCoinsPage);
     centralWidget->addWidget(sendCoinsPage);
     centralWidget->addWidget(sendMessagesPage);
+    centralWidget->addWidget(sendMessagesAnonPage);
     //centralWidget->addWidget(messagePage);
     //centralWidget->addWidget(invoicePage);
     //centralWidget->addWidget(receiptPage);
@@ -297,6 +301,8 @@ void BitcoinGUI::createActions()
     connect(invoiceAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
     connect(receiptAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(receiptAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    connect(sendMessagesAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(sendMessagesAnonAction, SIGNAL(triggered()), this, SLOT(gotoSendMessagesAnonPage()));
     connect(sendCoinsAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(sendCoinsAnonAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
     connect(appAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
@@ -486,6 +492,24 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
 
         // Ask for passphrase if needed
         connect(walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
+    }
+}
+
+void BitcoinGUI::setMessageModel(MessageModel *messageModel)
+{
+    this->messageModel = messageModel;
+    if(messageModel)
+    {
+        // Report errors from wallet thread
+        connect(messageModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
+
+        //messagePage->setModel(messageModel);
+        sendMessagesPage->setModel(messageModel);
+        sendMessagesAnonPage->setModel(messageModel);
+
+        // Balloon pop-up for new message
+        connect(messageModel, SIGNAL(rowsInserted(QModelIndex,int,int)),
+                this, SLOT(incomingMessage(QModelIndex,int,int)));
     }
 }
 
@@ -820,8 +844,18 @@ void BitcoinGUI::gotoSendCoinsPage()
 
 void BitcoinGUI::gotoSendMessagesPage()
 {
+
     sendMessagesAction->setChecked(true);
     centralWidget->setCurrentWidget(sendMessagesPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+}
+
+void BitcoinGUI::gotoSendMessagesAnonPage()
+{
+    sendMessagesAnonAction->setChecked(true);
+    centralWidget->setCurrentWidget(sendMessagesAnonPage);
 
     exportAction->setEnabled(false);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);

@@ -115,7 +115,8 @@ bool SecureMsgScanBlockChain();
 
 int SecureMsgScanMessages();
 
-int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
+int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
+
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
 

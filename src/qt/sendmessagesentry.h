@@ -6,7 +6,6 @@
 namespace Ui {
     class SendMessagesEntry;
 }
-class WalletModel;
 class MessageModel;
 class SendMessagesRecipient;
 
@@ -40,18 +39,16 @@ public slots:
     
 signals:
     void removeEntry(SendMessagesEntry *entry);
-    void messageTextChanged();
+
 private slots:
     void on_deleteButton_clicked();
-    void on_sendTo_textChanged(const QString &address);
     void on_addressBookButton_clicked();
     void on_pasteButton_clicked();
-    //void updateDisplayUnit();
+    void on_sendTo_textChanged(const QString &address);
 
 private:
     Ui::SendMessagesEntry *ui;
     MessageModel *model;
-    WalletModel *wallet;
 };
 
 #endif // SENDMESSAGESENTRY_H

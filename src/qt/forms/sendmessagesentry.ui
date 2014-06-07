@@ -115,7 +115,17 @@
     </widget>
    </item>
    <item row="6" column="2">
-    <widget class="QPlainTextEdit" name="messageText"/>
+    <widget class="QValidatedTextEdit" name="messageText">
+     <property name="mouseTracking">
+      <bool>true</bool>
+     </property>
+     <property name="focusPolicy">
+      <enum>Qt::WheelFocus</enum>
+     </property>
+     <property name="tabChangesFocus">
+      <bool>false</bool>
+     </property>
+    </widget>
    </item>
    <item row="4" column="2">
     <widget class="QValidatedLineEdit" name="addAsLabel">
@@ -141,7 +151,7 @@
     </widget>
    </item>
    <item row="5" column="0">
-    <widget class="QLabel" name="label_3">
+    <widget class="QLabel" name="publicKeyLabel">
      <property name="text">
       <string>&amp;Public Key:</string>
      </property>
@@ -151,7 +161,7 @@
     </widget>
    </item>
    <item row="5" column="2">
-    <widget class="QLineEdit" name="publicKey"/>
+    <widget class="QValidatedLineEdit" name="publicKey"/>
    </item>
   </layout>
  </widget>
@@ -160,6 +170,11 @@
    <class>QValidatedLineEdit</class>
    <extends>QLineEdit</extends>
    <header>qvalidatedlineedit.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QValidatedTextEdit</class>
+   <extends>QPlainTextEdit</extends>
+   <header>qvalidatedtextedit.h</header>
   </customwidget>
  </customwidgets>
  <resources>

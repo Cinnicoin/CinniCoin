@@ -7,6 +7,7 @@
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
+class MessageModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
@@ -50,6 +51,11 @@ public:
         functionality.
     */
     void setWalletModel(WalletModel *walletModel);
+    /** Set the message model.
+        The message model represents a represents the encrypted messaging suite, and offers access to the list of message, contacts book and sending
+        functionality.
+    */
+    void setMessageModel(MessageModel *messageModel);
 
 protected:
     void changeEvent(QEvent *e);
@@ -60,6 +66,7 @@ protected:
 private:
     ClientModel *clientModel;
     WalletModel *walletModel;
+    MessageModel *messageModel;
 
     QStackedWidget *centralWidget;
 
@@ -72,8 +79,8 @@ private:
     AddressBookPage *receiptPage;
     SendCoinsDialog *sendCoinsPage;
     SendMessagesDialog *sendMessagesPage;
-    AddressBookPage *messageAnonPage;
-    AddressBookPage *sendCoinsAnonPage;
+    SendMessagesDialog *sendMessagesAnonPage;
+    SendCoinsDialog *sendCoinsAnonPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
 
     QLabel *labelEncryptionIcon;
@@ -161,6 +168,8 @@ private slots:
     void gotoSendCoinsPage();
     /** Switch to send messages page */
     void gotoSendMessagesPage();
+    /** Switch to send messages page */
+    void gotoSendMessagesAnonPage();
     /** Switch to send messages page */
     void gotoMessagesPage();
 

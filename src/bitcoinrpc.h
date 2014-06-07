@@ -202,13 +202,9 @@ extern json_spirit::Value getblock(const json_spirit::Array& params, bool fHelp)
 extern json_spirit::Value getblockbynumber(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getcheckpoint(const json_spirit::Array& params, bool fHelp);
 
-
 extern json_spirit::Value smsgscanchain(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value smsgaddkey(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value smsggetlocalpubkey(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value smsgsend(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value smsgsendanon(const json_spirit::Array& params, bool fHelp);
-
-
 
 #endif
