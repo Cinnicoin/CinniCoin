@@ -167,8 +167,8 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
      wallet->AvailableCoins(vCoins, true, coinControl);
      BOOST_FOREACH(const COutput& out, vCoins)
          nBalance += out.tx->vout[out.i].nValue;
- 
-     if(total > nBalance) 
+
+     if(total > nBalance)
     {
         return AmountExceedsBalance;
     }

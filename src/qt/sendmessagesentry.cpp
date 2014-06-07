@@ -3,6 +3,7 @@
 #include "guiutil.h"
 #include "bitcoinunits.h"
 #include "addressbookpage.h"
+#include "messagemodel.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
@@ -22,13 +23,14 @@ SendMessagesEntry::SendMessagesEntry(QWidget *parent) :
 #endif
 #if QT_VERSION >= 0x040700
     /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-    ui->addAsLabel->setPlaceholderText(tr("Enter a label for this address to add it to your address book"));
+    ui->publicKey->setPlaceholderText(tr("Enter a label for this address to add it to your address book"));
     ui->sendTo->setPlaceholderText(tr("Enter a valid CinniCoin address"));
+    ui->addAsLabel->setPlaceholderText(tr("Enter the public key for the address above, it is not in the blockchain"));
 #endif
     setFocusPolicy(Qt::TabFocus);
-    setFocusProxy(ui->payTo);
+    setFocusProxy(ui->sendTo);
 
-    GUIUtil::setupAddressWidget(ui->payTo, this);
+    GUIUtil::setupAddressWidget(ui->sendTo, this);
 }
 
 SendMessagesEntry::~SendMessagesEntry()
@@ -46,8 +48,11 @@ void SendMessagesEntry::on_addressBookButton_clicked()
 {
     if(!model)
         return;
+
     AddressBookPage dlg(AddressBookPage::ForSending, AddressBookPage::SendingTab, this);
-    dlg.setModel(model->getAddressTableModel());
+
+    dlg.setModel(model->walletModel->getAddressTableModel());
+
     if(dlg.exec())
     {
         ui->sendTo->setText(dlg.getReturnValue());
@@ -55,23 +60,26 @@ void SendMessagesEntry::on_addressBookButton_clicked()
     }
 }
 
-void SendMessagesEntry::on_payTo_textChanged(const QString &address)
+void SendMessagesEntry::on_sendTo_textChanged(const QString &address)
 {
     if(!model)
         return;
+
     // Fill in label from address book, if address has an associated label
-    QString associatedLabel = model->getAddressTableModel()->labelForAddress(address);
+    QString associatedLabel = wallet->getAddressTableModel()->labelForAddress(address);
+
     if(!associatedLabel.isEmpty())
         ui->addAsLabel->setText(associatedLabel);
 }
 
-void SendMessagesEntry::setModel(WalletModel *model)
+void SendMessagesEntry::setModel(MessageModel *model)
 {
+
     this->model = model;
 
-    if(model && model->getOptionsModel())
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-    connect(ui->messageText, SIGNAL(textChanged()), this, SIGNAL(messageTextChanged())); 
+    if(model && model->walletModel && model->walletModel->getOptionsModel())
+        connect(ui->messageText, SIGNAL(textChanged()), this, SIGNAL(messageTextChanged()));
+
     clear();
 }
 
@@ -86,8 +94,6 @@ void SendMessagesEntry::clear()
     ui->addAsLabel->clear();
     ui->messageText->clear();
     ui->sendTo->setFocus();
-    // update the display unit, to not use the default ("BTC")
-    updateDisplayUnit();
 }
 
 void SendMessagesEntry::on_deleteButton_clicked()
@@ -97,77 +103,63 @@ void SendMessagesEntry::on_deleteButton_clicked()
 
 bool SendMessagesEntry::validate()
 {
-    // Check input validity
-    bool retval = true;
 
-    if(!ui->messageText->validate())
+    if(ui->messageText->toPlainText() == "")
     {
-        retval = false;
-    }
-    else
-    {
-        if(ui->messageText->text() == '')
-        {
-            // Cannot send a bkabj nessage
-            ui->messageText->setValid(false);
-            retval = false;
-        }
+        // Cannot send a blank message
+        //ui->messageText->setValid(false);
+        return false;
     }
 
-    if(!ui->sendTo->hasAcceptableInput() ||
-       (model && !model->validateAddress(ui->sendTo->text())))
+    if(!ui->sendTo->hasAcceptableInput() || (model->walletModel->validateAddress(ui->sendTo->text())))
     {
-        ui->sendTo->setValid(false);
-        retval = false;
+        //ui->sendTo->setValid(false);
+        return false;
     }
 
-    return retval;
+    return true;
 }
 
-SendCoinsRecipient SendMessagesEntry::getValue()
+SendMessagesRecipient SendMessagesEntry::getValue()
 {
-    SendCoinsRecipient rv;
+    SendMessagesRecipient rv;
 
-    rv.address = ui->payTo->text();
+    rv.address = ui->sendTo->text();
     rv.label = ui->addAsLabel->text();
-    rv.message = ui->payAmount->value();
+    rv.pubkey = ui->publicKey->text();
+    rv.message = ui->messageText->toPlainText();
 
     return rv;
 }
 
+
 QWidget *SendMessagesEntry::setupTabChain(QWidget *prev)
 {
-	QWidget::setTabOrder(prev, ui->payTo);
-    QWidget::setTabOrder(ui->payTo, ui->addressBookButton);
+    /*
+    QWidget::setTabOrder(prev, ui->sendTo);
+    QWidget::setTabOrder(ui->sendTo, ui->addressBookButton);
     QWidget::setTabOrder(ui->addressBookButton, ui->pasteButton);
     QWidget::setTabOrder(ui->pasteButton, ui->deleteButton);
     QWidget::setTabOrder(ui->deleteButton, ui->addAsLabel);
+    */
 
-	return ui->payAmount->setupTabChain(ui->addAsLabel);
+    //return ui->messageText->setupTabChain(ui->addAsLabel);
 }
 
-void SendMessagesEntry::setValue(const SendCoinsRecipient &value)
+void SendMessagesEntry::setValue(const SendMessagesRecipient &value)
 {
-    ui->payTo->setText(value.address);
+    ui->sendTo->setText(value.address);
     ui->addAsLabel->setText(value.label);
-    ui->payAmount->setValue(value.amount);
+    ui->publicKey->setText(value.pubkey);
+    ui->messageText->setPlainText(value.message);
 }
 
 bool SendMessagesEntry::isClear()
 {
-    return ui->payTo->text().isEmpty();
+    return ui->sendTo->text().isEmpty();
 }
 
 void SendMessagesEntry::setFocus()
 {
-    ui->payTo->setFocus();
-}
-
-void SendMessagesEntry::updateDisplayUnit()
-{
-    if(model && model->getOptionsModel())
-    {
-        // Update payAmount with the current unit
-        ui->payAmount->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
-    }
+    ui->sendTo->setFocus();
 }

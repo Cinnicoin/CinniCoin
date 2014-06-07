@@ -11,9 +11,10 @@ class TransactionView;
 class OverviewPage;
 class AddressBookPage;
 class MessagePage;
-class InvoicesPage;
-class ReceiptsPage;
+class InvoicePage;
+class ReceiptPage;
 class SendCoinsDialog;
+class SendMessagesDialog;
 class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
@@ -70,6 +71,9 @@ private:
     AddressBookPage *invoicePage;
     AddressBookPage *receiptPage;
     SendCoinsDialog *sendCoinsPage;
+    SendMessagesDialog *sendMessagesPage;
+    AddressBookPage *messageAnonPage;
+    AddressBookPage *sendCoinsAnonPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
 
     QLabel *labelEncryptionIcon;
@@ -83,10 +87,14 @@ private:
     QAction *historyAction;
     QAction *quitAction;
     QAction *sendCoinsAction;
+    QAction *sendCoinsAnonAction;
+    QAction *sendMessagesAction;
+    QAction *sendMessagesAnonAction;
     QAction *addressBookAction;
     QAction *messageAction;
     QAction *invoiceAction;
     QAction *receiptAction;
+    QAction *appAnonAction;
     QAction *signMessageAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
@@ -151,6 +159,10 @@ private slots:
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
     void gotoSendCoinsPage();
+    /** Switch to send messages page */
+    void gotoSendMessagesPage();
+    /** Switch to send messages page */
+    void gotoMessagesPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");

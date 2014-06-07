@@ -7,9 +7,10 @@ namespace Ui {
     class SendMessagesEntry;
 }
 class WalletModel;
-class SendCoinsRecipient;
+class MessageModel;
+class SendMessagesRecipient;
 
-/** A single entry in the dialog for sending bitcoins. */
+/** A single entry in the dialog for sending messages. */
 class SendMessagesEntry : public QFrame
 {
     Q_OBJECT
@@ -18,14 +19,14 @@ public:
     explicit SendMessagesEntry(QWidget *parent = 0);
     ~SendMessagesEntry();
 
-    void setModel(WalletModel *model);
+    void setModel(MessageModel *model);
     bool validate();
-    SendCoinsRecipient getValue();
+    SendMessagesRecipient getValue();
 
     /** Return whether the entry is still empty and unedited */
     bool isClear();
 
-    void setValue(const SendCoinsRecipient &value);
+    void setValue(const SendMessagesRecipient &value);
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */
@@ -39,17 +40,18 @@ public slots:
     
 signals:
     void removeEntry(SendMessagesEntry *entry);
-    void payAmountChanged();
+    void messageTextChanged();
 private slots:
     void on_deleteButton_clicked();
-    void on_payTo_textChanged(const QString &address);
+    void on_sendTo_textChanged(const QString &address);
     void on_addressBookButton_clicked();
     void on_pasteButton_clicked();
-    void updateDisplayUnit();
+    //void updateDisplayUnit();
 
 private:
     Ui::SendMessagesEntry *ui;
-    WalletModel *model;
+    MessageModel *model;
+    WalletModel *wallet;
 };
 
 #endif // SENDMESSAGESENTRY_H
