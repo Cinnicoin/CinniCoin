@@ -6,10 +6,10 @@
 
 // length of unencrypted header
 // 4 + 1 + 8 + 20 + 16 + 33 + 32 + 4
-const int SMSG_HDR_LEN = 118;
+const unsigned int SMSG_HDR_LEN = 118;
 
 // length of encrypted header in payload
-const int SMSG_PL_HDR_LEN = 1+20+65+4;
+const unsigned int SMSG_PL_HDR_LEN = 1+20+65+4;
 
 
 #pragma pack(1)
@@ -52,12 +52,12 @@ public:
 
 class MessageData
 {
-// Decrypted SecureMessage data
+// -- Decrypted SecureMessage data
 public:
     int64_t                     timestamp;
-    std::vector<unsigned char>  vchToAddress;
-    std::vector<unsigned char>  vchFromAddress;
-    std::vector<unsigned char>  vchMessage; // null terminated
+    std::string                 sToAddress;
+    std::string                 sFromAddress;
+    std::vector<unsigned char>  vchMessage; // null terminated plaintext
 };
 
 class SecMsgToken
@@ -66,8 +66,8 @@ public:
     SecMsgToken(int64_t ts, unsigned char* p, int np, long int o)
     {
         timestamp = ts;
-        // payload will always be > 8, just make sure
-        if (np < 8)
+        
+        if (np < 8) // payload will always be > 8, just make sure
             memset(sample, 0, 8);
         else
             memcpy(sample, p, 8);
@@ -78,7 +78,6 @@ public:
     
     ~SecMsgToken() {};
     
-    //bool operator <(SecMsgToken const& x, SecMsgToken const& y)
     bool operator <(const SecMsgToken & y) const
     {
         // pack and memcmp from timesent?
@@ -90,6 +89,24 @@ public:
     int64_t                     timestamp;    // doesn't need to be full 64 bytes?
     unsigned char               sample[8];    // first 8 bytes of payload - a hash
     long int                    offset;       // offset
+    
+};
+
+class SecMsgBucket
+{
+public:
+    SecMsgBucket()
+    {
+        timeChanged = 0;
+        hash = 0;
+    };
+    ~SecMsgBucket() {};
+    
+    void hashBucket();
+    
+    int64_t                     timeChanged;
+    uint32_t                    hash; // token set should be ordered the same on each node
+    std::set<SecMsgToken>       setTokens;
     
 };
 

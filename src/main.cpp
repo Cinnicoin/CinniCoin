@@ -3373,6 +3373,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
         if (ProcessBlock(pfrom, &block))
             mapAlreadyAskedFor.erase(inv);
         if (block.nDoS) pfrom->Misbehaving(block.nDoS);
+        
+        if (!fNoSmsg)
+            SecureMsgScanBlock(block);
     }
 
 
@@ -3503,7 +3506,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
 
     else
     {
-        SecureMsgReceiveData(pfrom, strCommand, vRecv);
+        if (!fNoSmsg)
+            SecureMsgReceiveData(pfrom, strCommand, vRecv);
         
         // Ignore unknown commands for extensibility
     }
@@ -3798,7 +3802,8 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         if (!vGetData.empty())
             pto->PushMessage("getdata", vGetData);
         
-        SecureMsgSendData(pto, fSendTrickle); // should be in cs_main?
+        if (!fNoSmsg)
+            SecureMsgSendData(pto, fSendTrickle); // should be in cs_main?
     }
     
     

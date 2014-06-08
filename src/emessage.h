@@ -5,16 +5,28 @@
 #define CINNICOIN_EMESSAGE_H
 
 
+
 #include "net.h"
 #include "wallet.h"
 #include "db.h"
 #include "emessageclass.h"
 
-const int SMSG_BUCKET_LEN = 60 * 5; // in seconds
-//const int SMSG_RETENTION  = 60 * 60 * 1; // in seconds
-const int SMSG_RETENTION  = 60 * 30 * 1; // in seconds
+const unsigned int SMSG_BUCKET_LEN = 60 * 10; // in seconds
+const unsigned int SMSG_RETENTION  = 60 * 60 * 2; // in seconds
 
-extern std::map<int64_t, std::set<SecMsgToken> > smsgSets;
+const unsigned int SMSG_TIME_LEEWAY = 30;
+
+
+/** Inbox db changed.
+ * @note called with lock cs_smsgInbox held.
+ */
+//class SecInboxMsg;
+//boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
+
+extern std::map<int64_t, SecMsgBucket> smsgSets;
+extern CCriticalSection cs_smsg; // all except inbox and outbox
+extern CCriticalSection cs_smsgInbox;
+extern CCriticalSection cs_smsgOutbox;
 
 
 // -- get at the data
@@ -69,18 +81,92 @@ public:
         LockedPageManager::instance.UnlockRange(&chIV[0], sizeof chIV);
     }
     
-    bool SetKey(const std::vector<unsigned char>& chNewKey, unsigned char* chNewIV);
+    bool SetKey(const std::vector<unsigned char>& vchNewKey, unsigned char* chNewIV);
     bool Encrypt(unsigned char* chPlaintext, uint32_t nPlain, std::vector<unsigned char> &vchCiphertext);
     bool Decrypt(unsigned char* chCiphertext, uint32_t nCipher, std::vector<unsigned char>& vchPlaintext);
 };
 
 
-
-
-class CAddrToPubKeyDB : public CDB
+class SecInboxMsg
 {
 public:
-    CAddrToPubKeyDB(const char* pszMode="r+") : CDB("smsgPubKeys.dat", pszMode) { }
+    int64_t                         timeReceived;
+    std::string                     sAddrTo; // pointless not storing this, if someone sees message in local db, they already know it's to you.
+    std::vector<unsigned char>      vchMessage;
+    
+    IMPLEMENT_SERIALIZE
+    (
+        READWRITE(this->timeReceived);
+        READWRITE(this->sAddrTo);
+        READWRITE(this->vchMessage);
+    )
+        
+};
+
+
+class CSmesgInboxDB : public CDB
+{
+public:
+    CSmesgInboxDB(const char* pszMode="r+") : CDB("smsgInbox.dat", pszMode) { }
+    
+    Dbc* GetAtCursor()
+    {
+        return GetCursor();
+    }
+    
+    bool ReadUnread(std::vector<unsigned char>& vchUnread)
+    {
+        std::string skey = "Unread";
+        return Read(skey, vchUnread);
+    }
+    
+    bool WriteUnread(std::vector<unsigned char>& vchUnread)
+    {
+        std::string skey = "Unread";
+        return Write(skey, vchUnread);
+    }
+    
+    bool ReadSmesg(std::vector<unsigned char>& vchKey, SecInboxMsg& smsgib)
+    {
+        return Read(vchKey, smsgib);
+    }
+    
+    bool WriteSmesg(std::vector<unsigned char>& vchKey, SecInboxMsg& smsgib)
+    {
+        return Write(vchKey, smsgib);
+    }
+    
+    bool ExistsSmesg(std::vector<unsigned char>& vchKey)
+    {
+        return Exists(vchKey);
+    }
+};
+
+class CSmesgOutboxDB : public CDB
+{
+public:
+    CSmesgOutboxDB(const char* pszMode="r+") : CDB("smsgOutbox.dat", pszMode) { }
+    
+    bool ReadPK(CKeyID& addr, CPubKey& pubkey)
+    {
+        return Read(addr, pubkey);
+    }
+    
+    bool WritePK(CKeyID& addr, CPubKey& pubkey)
+    {
+        return Write(addr, pubkey);
+    }
+    
+    bool ExistsPK(CKeyID& addr)
+    {
+        return Exists(addr);
+    }
+};
+
+class CSmesgPubKeyDB : public CDB
+{
+public:
+    CSmesgPubKeyDB(const char* pszMode="r+") : CDB("smsgPubKeys.dat", pszMode) { }
     
     bool ReadPK(CKeyID& addr, CPubKey& pubkey)
     {
@@ -99,9 +185,10 @@ public:
 };
 
 
+std::string getTimeString(int64_t timestamp, char *buffer, size_t nBuffer);
 
 
-bool SecureMsgStart();
+bool SecureMsgStart(bool fScanChain);
 bool SecureMsgStop();
 
 bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRecv);
@@ -109,6 +196,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
 bool SecureMsgSendData(CNode* pto, bool fSendTrickle);
 
 
+bool SecureMsgScanBlock(CBlock& block);
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart);
 bool SecureMsgScanBlockChain();
 
@@ -122,12 +210,15 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 int SecureMsgTransmit(CNode* pto, SecMsgToken &token);
 
 int SecureMsgReceive(std::vector<unsigned char>& vchData);
-int SecureMsgStore(SecureMessage& smsg);
-int SecureMsgRetrieve(SecureMessage& smsg, long int offset);
+
+int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool fUpdateBucket);
+int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
+//int SecureMsgRetrieve(SecureMessage& smsg, long int offset);
 
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message);
 
-int SecureMsgDecrypt(std::string& address, SecureMessage& smsg, MessageData& msg);
+int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, MessageData& msg);
+int SecureMsgDecrypt(bool fTestOnly, std::string& address, SecureMessage& smsg, MessageData& msg);
 
 
 

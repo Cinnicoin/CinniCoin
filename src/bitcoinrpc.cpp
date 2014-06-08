@@ -273,6 +273,9 @@ static const CRPCCommand vRPCCommands[] =
     { "smsggetlocalpubkey",     &smsggetlocalpubkey,     false,  false},
     { "smsgsend",               &smsgsend,               false,  false},
     { "smsgsendanon",           &smsgsendanon,           false,  false},
+    { "smsginbox",              &smsginbox,              false,  false},
+    
+    
     
     
     

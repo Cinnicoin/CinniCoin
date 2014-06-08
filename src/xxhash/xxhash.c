@@ -111,9 +111,9 @@ FORCE_INLINE void* XXH_memcpy(void* dest, const void* src, size_t size) { return
 #endif
 
 #if defined(__GNUC__)  && !defined(XXH_USE_UNALIGNED_ACCESS)
-#  define _PACKED __attribute__ ((packed))
+#  define _PACKED_XXH __attribute__ ((packed))
 #else
-#  define _PACKED
+#  define _PACKED_XXH
 #endif
 
 #if !defined(XXH_USE_UNALIGNED_ACCESS) && !defined(__GNUC__)
@@ -125,13 +125,13 @@ FORCE_INLINE void* XXH_memcpy(void* dest, const void* src, size_t size) { return
 #endif
 
 
-typedef struct _U32_S { U32 v; } _PACKED U32_S_XXH;
+typedef struct _U32_S { U32 v; } _PACKED_XXH U32_S_XXH;
 
 #if !defined(XXH_USE_UNALIGNED_ACCESS) && !defined(__GNUC__)
 #  pragma pack(pop)
 #endif
 
-#define A32(x) (((U32_S_XXH *)(x))->v)
+#define A32_XXH(x) (((U32_S_XXH *)(x))->v)
 
 
 //***************************************
@@ -193,7 +193,7 @@ typedef enum { XXH_aligned, XXH_unaligned } XXH_alignment;
 FORCE_INLINE U32 XXH_readLE32_align(const U32* ptr, XXH_endianess endian, XXH_alignment align)
 { 
     if (align==XXH_unaligned)
-        return endian==XXH_littleEndian ? A32(ptr) : XXH_swap32(A32(ptr)); 
+        return endian==XXH_littleEndian ? A32_XXH(ptr) : XXH_swap32(A32_XXH(ptr)); 
     else
         return endian==XXH_littleEndian ? *ptr : XXH_swap32(*ptr); 
 }
