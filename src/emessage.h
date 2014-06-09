@@ -140,6 +140,11 @@ public:
     {
         return Exists(vchKey);
     }
+    
+    bool EraseSmesg(std::vector<unsigned char>& vchKey)
+    {
+        return Erase(vchKey);
+    }
 };
 
 class CSmesgOutboxDB : public CDB
@@ -207,13 +212,12 @@ int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
 int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
-int SecureMsgTransmit(CNode* pto, SecMsgToken &token);
+int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData);
 
 int SecureMsgReceive(std::vector<unsigned char>& vchData);
 
 int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool fUpdateBucket);
 int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
-//int SecureMsgRetrieve(SecureMessage& smsg, long int offset);
 
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message);
 

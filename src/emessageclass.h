@@ -88,7 +88,7 @@ public:
     
     int64_t                     timestamp;    // doesn't need to be full 64 bytes?
     unsigned char               sample[8];    // first 8 bytes of payload - a hash
-    long int                    offset;       // offset
+    int64_t                     offset;       // offset
     
 };
 

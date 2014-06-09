@@ -7,6 +7,7 @@
 
 #include "wallet.h"
 
+
 extern CWallet* pwalletMain;
 
 void StartShutdown();

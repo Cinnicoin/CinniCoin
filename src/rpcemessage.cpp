@@ -6,6 +6,9 @@
     Link in bitcoinrpc.h/cpp
 */
 
+
+// #include <unordered_set>
+
 #include "main.h"
 #include "bitcoinrpc.h"
 
@@ -196,12 +199,16 @@ Value smsginbox(const Array& params, bool fHelp)
             
             uint32_t nMessages = 0;
             
+            std::set<std::vector<unsigned char> > setToDelete;
+            std::set<std::vector<unsigned char> >::iterator itd;
+            
             Dbt datKey;
             Dbt datValue;
             
             datKey.set_flags(DB_DBT_USERMEM);
             datValue.set_flags(DB_DBT_USERMEM);
             
+            std::vector<unsigned char> vchDelete;
             std::vector<unsigned char> vchKeyData;
             std::vector<unsigned char> vchValueData;
             
@@ -254,15 +261,32 @@ Value smsginbox(const Array& params, bool fHelp)
                 if (datKey.get_size() != 17)
                     continue; // not a message key
                 
+                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                ssValue.SetType(SER_DISK);
+                ssValue.clear();
+                ssValue.write((char*)datKey.get_data(), datKey.get_size());
+                SecInboxMsg smsgInbox;
+                ssValue >> vchKey;
+                
+                setToDelete.insert(vchKey);
+                
+                /*
                 // TODO: how to be sure data is really gone?
                 if ((ret = pcursor->del(0)) != 0) // NOT working
                 {
                     printf("Delete failed %d, %s\n", ret, db_strerror(ret));
                 };
-                
+                */
                 nMessages++;
             };
             pcursor->close();
+            
+            for (itd = setToDelete.begin(); itd != setToDelete.end(); ++itd)
+            {
+                std::vector<unsigned char> vchDeleteT = (*itd);
+                dbInbox.EraseSmesg(vchDeleteT);
+            };
+            
             
             vchUnread.resize(0);
             dbInbox.WriteUnread(vchUnread);
