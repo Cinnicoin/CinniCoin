@@ -7,8 +7,8 @@
 
 
 #include "net.h"
-#include "wallet.h"
 #include "db.h"
+#include "wallet.h"
 #include "emessageclass.h"
 
 const unsigned int SMSG_BUCKET_LEN = 60 * 10; // in seconds
@@ -20,8 +20,8 @@ const unsigned int SMSG_TIME_LEEWAY = 30;
 /** Inbox db changed.
  * @note called with lock cs_smsgInbox held.
  */
-//class SecInboxMsg;
-//boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
+class SecInboxMsg;
+extern boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
 
 extern std::map<int64_t, SecMsgBucket> smsgSets;
 extern CCriticalSection cs_smsg; // all except inbox and outbox

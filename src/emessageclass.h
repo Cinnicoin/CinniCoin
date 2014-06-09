@@ -98,7 +98,7 @@ public:
     SecMsgBucket()
     {
         timeChanged = 0;
-        hash = 0;
+        hash        = 0;
     };
     ~SecMsgBucket() {};
     
@@ -117,13 +117,15 @@ class SecMsgNode
 public:
     SecMsgNode()
     {
-        lastSeen = 0;
-        enabled  = false;
+        lastSeen        = 0;
+        lastMatched     = 0;
+        enabled         = false;
     };
     
     ~SecMsgNode() {};
     
     int64_t                     lastSeen;
+    int64_t                     lastMatched;
     bool                        enabled;
     
 };

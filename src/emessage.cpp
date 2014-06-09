@@ -44,6 +44,8 @@ Notes:
 
 // TODO: For buckets older than current, only need to store length and hash in memory
 
+boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
+
 std::map<int64_t, SecMsgBucket> smsgSets;
 
 CCriticalSection cs_smsg; // all except inbox and outbox
@@ -181,8 +183,8 @@ void ThreadSecureMsg(void* parg)
             
             while (it != smsgSets.end())
             {
-                if (fDebugSmsg)
-                    printf("Checking bucket %ld, size %lu \n", it->first, it->second.setTokens.size());
+                //if (fDebugSmsg)
+                //    printf("Checking bucket %ld, size %lu \n", it->first, it->second.setTokens.size());
                 if (it->first < cutoffTime)
                 {
                     
@@ -383,6 +385,26 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         //printf("got smsgPing.\n");
         pfrom->PushMessage("smsgPong");
     } else
+    if (strCommand == "smsgMatch")
+    {
+        std::vector<unsigned char> vchData;
+        vRecv >> vchData;
+        
+        int64_t time;
+        if (vchData.size() < 8)
+        {
+            printf("smsgMatch, not enough data %lu.\n", vchData.size());
+            pfrom->Misbehaving(1);
+            return false;
+        };
+        
+        memcpy(&time, &vchData[0], 8);
+        pfrom->smsgData.lastMatched = time;
+        
+        if (fDebugSmsg)
+            printf("Peer buckets matched at %ld.\n", time);
+        
+    } else
     if (strCommand == "smsgMsg")
     {
         //printf("got smsgPing.\n");
@@ -434,12 +456,14 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         vchDataOut.reserve(4 + 8 * nmessage); // reserve max possible size
         vchDataOut.resize(4);
         uint32_t nShowBuckets = 0;
+        int64_t now = GetTime();
         
         unsigned char *p = &vchData[4];
         for (uint32_t i = 0; i < nmessage; ++i)
         {
             int64_t time;
             uint32_t ncontent, hash;
+            //uint32_t nMatch = 0;
             memcpy(&time, p, 8);
             memcpy(&ncontent, p+8, 4);
             memcpy(&hash, p+12, 4);
@@ -447,7 +471,6 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             p += 16;
             
             // Check time valid:
-            int64_t now = GetTime();
             if (time < now - SMSG_RETENTION)
             {
                 if (fDebugSmsg)
@@ -490,6 +513,14 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         memcpy(&vchDataOut[0], &nShowBuckets, 4);
         if (vchDataOut.size() > 4)
             pfrom->PushMessage("smsgShow", vchDataOut);
+        else
+        {
+            // peer has no buckets we want, don't send until something changes
+            // peer will still request buckets fom this node if needed (< ncontent)
+            vchDataOut.resize(8);
+            memcpy(&vchDataOut[0], &now, 8);
+            pfrom->PushMessage("smsgMatch", vchDataOut);
+        };
         
     } else
     if (strCommand == "smsgShow")
@@ -666,8 +697,6 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
                     if (fDebugSmsg)
                         printf("Break bunch %u, %lu.\n", nBunch, vchBunch.size());
                     break; // end here, peer will send more want messages if needed.
-                    // TODO: send here? How to tell peer 
-                    // TODO: check buckets < this node (in sendData()), or force bucket swap every x mins
                 };
             };
             p += 16;
@@ -708,13 +737,13 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
         // -- first contact
         if (fDebugSmsg)
             printf("SecureMsgSendData() new node %s.\n", pto->addrName.c_str());
-        // Send smsgPing once, do nothing until receive 1st smsgPong (then set enabled)
+        // -- Send smsgPing once, do nothing until receive 1st smsgPong (then set enabled)
         pto->PushMessage("smsgPing");
         pto->smsgData.lastSeen = time(NULL);
         return true;
     } else
     if (!pto->smsgData.enabled
-        || now - pto->smsgData.lastSeen < 10)
+        || now - pto->smsgData.lastSeen < 15)
     {
         return true;
     };
@@ -735,14 +764,14 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
             
             uint32_t nbucketsShown = 0;
             vchData.resize(4);
-            //memcpy(&vchData[0], &nbuckets, 4);
+            
             unsigned char* p = &vchData[4];
             for (it = smsgSets.begin(); it != smsgSets.end(); ++it)
             {
                 SecMsgBucket &bkt = it->second;
                 
-                if (bkt.timeChanged < pto->smsgData.lastSeen)
-                    continue; // peer has this bucket, TODO: when messages split
+                if (bkt.timeChanged < pto->smsgData.lastMatched)
+                    continue; // peer has this bucket
                 
                 uint32_t size = bkt.setTokens.size();
                 uint32_t hash = bkt.hash;
@@ -1125,7 +1154,7 @@ int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut)
         //printf("addrpkdb.Read failed: %s.\n", coinAddress.ToString().c_str());
         return 2;
     };
-    printf("cpkOut: %s.\n", ValueString(cpkOut.Raw()).c_str());
+    //printf("cpkOut: %s.\n", ValueString(cpkOut.Raw()).c_str());
     
     addrpkdb.Close(); // necessary?
     
@@ -1291,7 +1320,7 @@ int SecureMsgReceive(std::vector<unsigned char>& vchData)
         SecureMessage* psmsg;
         psmsg = (SecureMessage*) &vchData[n];
         
-        printf("psmsg->nPayload %u.\n", psmsg->nPayload);
+        //printf("psmsg->nPayload %u.\n", psmsg->nPayload);
         
         // false == don't hash bucket
         if (SecureMsgStore(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload, false) != 0)
@@ -1348,6 +1377,8 @@ int SecureMsgReceive(std::vector<unsigned char>& vchData)
                 smsgInbox.sAddrTo       = addressTo;
                 //smsgInbox.vchMessage    = vchData;
                 smsgInbox.vchMessage    = std::vector<unsigned char>(vchData.begin() + n, vchData.begin() + n + SMSG_HDR_LEN + psmsg->nPayload);
+                
+                NotifySecMsgInboxChanged(smsgInbox);
                 
                 dbInbox.WriteSmesg(vchKey, smsgInbox);
                 
@@ -1501,6 +1532,9 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     secMesg.version = 1;
     secMesg.timestamp = time(NULL);
     
+    memset(secMesg.destHash, 0, 20); // Not used yet
+    memset(secMesg.hash, 0, 4); // Not used yet (checksum)
+    
     bool fSendAnonymous;
     CBitcoinAddress coinAddrFrom;
     CKeyID ckidFrom;
@@ -1599,7 +1633,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     //printf("P: %s.\n", ValueString(vchP).c_str());
     
     CPubKey cpkR = keyR.GetPubKey();
-    printf("cpkR: %s.\n", ValueString(cpkR.Raw()).c_str());
+    //printf("cpkR: %s.\n", ValueString(cpkR.Raw()).c_str());
     if (!cpkR.IsValid()
         || !cpkR.IsCompressed())
     {
@@ -1715,7 +1749,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     
     // Calculate a 32 byte MAC with HMACSHA256, using key_m as salt
-    // Message authentication code, (hash of timestamp + destination + IV + payload)
+    // Message authentication code, (hash of timestamp + destination + payload)
     
     bool fHmacOk = true;
     unsigned int nBytes = 32;
@@ -1845,7 +1879,7 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeade
     //printf("lenPdec: %d.\n", lenPdec);
     //printf("P dec: %s.\n", ValueString(vchP).c_str());
     
-    // Use public key P to calculate the SHA512 hash H. 
+    // -- Use public key P to calculate the SHA512 hash H. 
     
     std::vector<unsigned char> vchHashedDec;
     vchHashedDec.resize(64); // 512

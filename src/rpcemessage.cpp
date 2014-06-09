@@ -304,9 +304,7 @@ Value smsginbox(const Array& params, bool fHelp)
             
             dbInbox.ReadUnread(vchUnread);
             
-            result.push_back(Pair("unread", ValueString(vchUnread).c_str()));
-            
-            
+            //result.push_back(Pair("unread", ValueString(vchUnread).c_str()));
             
             size_t nMessages = vchUnread.size() / 16;
             
