@@ -52,6 +52,8 @@ private:
 
 private slots:
     void updateDisplayUnit();
+    void enableTrollbox();
+    void updateTrollName();
     void handleTransactionClicked(const QModelIndex &index);
     void sendIRCMessage();
 };

@@ -268,6 +268,37 @@ void OverviewPage::setIRCModel(IRCModel *ircmodel)
     {
         // Get IRC Messages
         connect(ircmodel, SIGNAL(ircMessageReceived(QString)), this, SLOT(ircAppendMessage(QString)));
+        connect(ircmodel->getOptionsModel(), SIGNAL(enableTrollboxChanged(bool)), this, SLOT(enableTrollbox()));
+        connect(ircmodel->getOptionsModel(), SIGNAL(trollNameChanged(QString)), this, SLOT(updateTrollName()));
+    }
+}
+
+void OverviewPage::enableTrollbox()
+{
+    if(ircmodel && ircmodel->getOptionsModel())
+    {
+        bool enableTrollbox = ircmodel->getOptionsModel()->getEnableTrollbox();
+
+        if(enableTrollbox)
+        {
+            ui->trollBox->show();
+            ui->lineEditTrollBox->show();
+        }
+        else
+        {
+            ui->trollBox->hide();
+            ui->lineEditTrollBox->hide();
+        }
+    }
+}
+
+void OverviewPage::updateTrollName()
+{
+    if(ircmodel && ircmodel->getOptionsModel())
+    {
+        QString trollname = "/nick " + ircmodel->getOptionsModel()->getTrollName();
+
+        Send(trollname.toStdString());
     }
 }
 

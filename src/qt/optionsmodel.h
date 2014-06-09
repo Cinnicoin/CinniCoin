@@ -32,6 +32,8 @@ public:
         Language,          // QString
         CoinControlFeatures, // bool
         OptionIDRowCount,
+        EnableTrollbox, // bool
+        TrollName, // QString
     };
 
     void Init();
@@ -51,6 +53,8 @@ public:
     bool getDisplayAddresses();
     QString getLanguage() { return language; }
     bool getCoinControlFeatures();
+    bool getEnableTrollbox();
+    QString getTrollName() { return trollname; }
 
 private:
     int nDisplayUnit;
@@ -59,11 +63,15 @@ private:
     bool fMinimizeOnClose;
     QString language;
     bool fCoinControlFeatures;
+    bool fEnableTrollbox;
+    QString trollname;
 
 signals:
     void displayUnitChanged(int unit);
     void transactionFeeChanged(qint64);
     void coinControlFeaturesChanged(bool);
+    void enableTrollboxChanged(bool);
+    void trollNameChanged(QString);
 };
 
 #endif // OPTIONSMODEL_H

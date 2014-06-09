@@ -339,8 +339,8 @@ void ThreadIRCSeed2(void* parg)
             // with technology
             int channel_number = 1;
             channel = strprintf("#abcittCoin%02d", channel_number);
-            Send(hSocket, strprintf("JOIN %s", channel.c_str()).c_str());
-            Send(hSocket, strprintf("WHO %s",  channel.c_str()).c_str());
+            Send(hSocket, strprintf("JOIN %s\r", channel.c_str()).c_str());
+            Send(hSocket, strprintf("WHO %s\r",  channel.c_str()).c_str());
         }
 
         int64 nStart = GetTime();

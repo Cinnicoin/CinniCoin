@@ -48,6 +48,8 @@ void OptionsModel::Init()
     nTransactionFee = settings.value("nTransactionFee").toLongLong();
     language = settings.value("language", "").toString();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
+    fEnableTrollbox = settings.value("fEnableTrollbox", true).toBool();
+    trollname = settings.value("trollname", "").toString();
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
     if (settings.contains("fUseUPnP"))
@@ -172,6 +174,10 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("language", "");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
+        case EnableTrollbox:
+            return QVariant(fEnableTrollbox);
+        case TrollName:
+            return settings.value("trollname", "");
         default:
             return QVariant();
         }
@@ -266,7 +272,18 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
              settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
              emit coinControlFeaturesChanged(fCoinControlFeatures);
              }
-             break; 
+             break;
+        case EnableTrollbox: {
+             fEnableTrollbox = value.toBool();
+             settings.setValue("fEnableTrollbox", fEnableTrollbox);
+             emit enableTrollboxChanged(fEnableTrollbox);
+             }
+             break;
+        case TrollName:
+            trollname = value.toString();
+            settings.setValue("trollname", trollname);
+            emit trollNameChanged(trollname);
+            break;
         default:
             break;
         }
@@ -283,6 +300,10 @@ qint64 OptionsModel::getTransactionFee()
 bool OptionsModel::getCoinControlFeatures()
  {
      return fCoinControlFeatures;
+ }
+bool OptionsModel::getEnableTrollbox()
+ {
+     return fEnableTrollbox;
  }
 bool OptionsModel::getMinimizeToTray()
 {
