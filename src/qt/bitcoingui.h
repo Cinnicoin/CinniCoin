@@ -8,6 +8,7 @@ class TransactionTableModel;
 class ClientModel;
 class WalletModel;
 class MessageModel;
+class IRCModel;
 class TransactionView;
 class OverviewPage;
 class AddressBookPage;
@@ -56,6 +57,11 @@ public:
         functionality.
     */
     void setMessageModel(MessageModel *messageModel);
+    /** Set the irc model.
+        The irc model represents a represents the irc suite, and offers access to sending and receiving
+        functionality.
+    */
+    void setIRCModel(IRCModel *ircModel);
 
 protected:
     void changeEvent(QEvent *e);
@@ -67,6 +73,7 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
     MessageModel *messageModel;
+    IRCModel *ircModel;
 
     QStackedWidget *centralWidget;
 

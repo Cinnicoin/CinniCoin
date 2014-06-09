@@ -207,7 +207,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/sendmessagesdialog.h \
     src/qt/messagemodel.h \
     src/emessageclass.h \
-    src/qt/qvalidatedtextedit.h
+    src/qt/qvalidatedtextedit.h \
+    src/qt/ircmodel.h
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -280,7 +281,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/sendmessagesentry.cpp \
     src/qt/sendmessagesdialog.cpp \
     src/qt/messagemodel.cpp \
-    src/qt/qvalidatedtextedit.cpp
+    src/qt/qvalidatedtextedit.cpp \
+    src/qt/ircmodel.cpp
 
 RESOURCES += \
     src/qt/bitcoin.qrc

@@ -5,7 +5,10 @@
 #ifndef BCINNIOIN_IRC_H
 #define BCINNIOIN_IRC_H
 
+#include "allocators.h" /* for SecureString */
+
 void ThreadIRCSeed(void* parg);
+bool Send(std::string text);
 
 extern int nGotIRCAddresses;
 

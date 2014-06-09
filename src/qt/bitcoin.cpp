@@ -6,6 +6,7 @@
 #include "walletmodel.h"
 #include "messagemodel.h"
 #include "optionsmodel.h"
+#include "ircmodel.h"
 #include "guiutil.h"
 #include "guiconstants.h"
 
@@ -233,10 +234,12 @@ int main(int argc, char *argv[])
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 MessageModel messageModel(pwalletMain);
+                IRCModel ircModel(&optionsModel);
 
                 window.setClientModel(&clientModel);
                 window.setWalletModel(&walletModel);
                 window.setMessageModel(&messageModel);
+                window.setIRCModel(&ircModel);
 
                 // If -min option passed, start window minimized.
                 if(GetBoolArg("-min"))
@@ -257,6 +260,7 @@ int main(int argc, char *argv[])
                 window.setClientModel(0);
                 window.setWalletModel(0);
                 window.setMessageModel(0);
+                window.setIRCModel(0);
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here

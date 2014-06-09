@@ -15,6 +15,7 @@
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "messagemodel.h"
+#include "ircmodel.h"
 #include "editaddressdialog.h"
 #include "optionsmodel.h"
 #include "transactiondescdialog.h"
@@ -65,6 +66,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     clientModel(0),
     walletModel(0),
     messageModel(0),
+    ircModel(0),
     encryptWalletAction(0),
     changePassphraseAction(0),
     aboutQtAction(0),
@@ -506,10 +508,30 @@ void BitcoinGUI::setMessageModel(MessageModel *messageModel)
         //messagePage->setModel(messageModel);
         sendMessagesPage->setModel(messageModel);
         sendMessagesAnonPage->setModel(messageModel);
-
+        /*
         // Balloon pop-up for new message
         connect(messageModel, SIGNAL(rowsInserted(QModelIndex,int,int)),
                 this, SLOT(incomingMessage(QModelIndex,int,int)));
+                */
+    }
+}
+
+void BitcoinGUI::setIRCModel(IRCModel *ircModel)
+{
+    this->ircModel = ircModel;
+    //QMessageBox::critical(this, "test", ircModel->objectName(), QMessageBox::Ok, QMessageBox::Ok);
+    if(ircModel)
+    {
+        // Report errors from wallet thread
+        connect(ircModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
+
+        overviewPage->setIRCModel(ircModel);
+
+        /*
+        // Balloon pop-up for new message
+        connect(ircModel, SIGNAL(rowsInserted(QModelIndex,int,int)),
+                this, SLOT(incomingMessage(QModelIndex,int,int)));
+                */
     }
 }
 

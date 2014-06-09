@@ -7,6 +7,7 @@
 #include "net.h"
 #include "strlcpy.h"
 #include "base58.h"
+#include "ui_interface.h"
 
 using namespace std;
 using namespace boost;
@@ -15,7 +16,8 @@ int nGotIRCAddresses = 0;
 
 void ThreadIRCSeed2(void* parg);
 
-
+SOCKET ghSocket;
+string channel;
 
 
 #pragma pack(push, 1)
@@ -55,10 +57,6 @@ bool DecodeAddress(string str, CService& addr)
 }
 
 
-
-
-
-
 static bool Send(SOCKET hSocket, const char* pszSend)
 {
     if (strstr(pszSend, "PONG") != pszSend)
@@ -73,6 +71,32 @@ static bool Send(SOCKET hSocket, const char* pszSend)
         psz += ret;
     }
     return true;
+}
+
+bool Send(string text)
+{
+
+    bool command = false;
+
+    if(text.compare(0, 4, "/msg") == 0)
+    {
+        text = text.substr(5);
+
+        text = text.substr(0, text.find_first_of(" ")) + " :" + text.substr(text.find_first_of(" ") + 1);
+    }
+    else
+        if(text.compare(0, 5, "/nick") == 0)
+        {
+            text = strprintf("NICK %s\r\n", text.substr(6).c_str());
+            command = true;
+        }
+    else
+        text = channel + " :" + text;
+
+    if(!command)
+        text = "PRIVMSG " + text + "\r\n";
+
+    return Send(ghSocket, text.c_str());
 }
 
 bool RecvLineIRC(SOCKET hSocket, string& strLine)
@@ -241,6 +265,8 @@ void ThreadIRCSeed2(void* parg)
                 return;
         }
 
+        ghSocket = hSocket;
+
         if (!RecvUntil(hSocket, "Found your hostname", "using your IP address instead", "Couldn't look up your hostname", "ignoring hostname"))
         {
             closesocket(hSocket);
@@ -302,16 +328,19 @@ void ThreadIRCSeed2(void* parg)
         }
 
         if (fTestNet) {
-            Send(hSocket, "JOIN #abcittCoinTEST2\r");
-            Send(hSocket, "WHO #abcittCoinTEST2\r");
+            channel = "#abcittCoinTest2";
+            Send(hSocket, strprintf("JOIN %s\r", channel.c_str()).c_str());
+            Send(hSocket, strprintf("WHO %s\r",  channel.c_str()).c_str());
         } else {
             // randomly join #CinniCoin00-#CinniCoin05
             // int channel_number = GetRandInt(5);
 
-            // Channel number is always 0 for initial release
-            int channel_number = 0;
-            Send(hSocket, strprintf("JOIN #abcittCoin%02d\r", channel_number).c_str());
-            Send(hSocket, strprintf("WHO #abcittCoin%02d\r", channel_number).c_str());
+            // Set to #1, for encrypted messaging. new channel for the people who keep up
+            // with technology
+            int channel_number = 1;
+            channel = strprintf("#abcittCoin%02d", channel_number);
+            Send(hSocket, strprintf("JOIN %s", channel.c_str()).c_str());
+            Send(hSocket, strprintf("WHO %s",  channel.c_str()).c_str());
         }
 
         int64 nStart = GetTime();
@@ -319,8 +348,14 @@ void ThreadIRCSeed2(void* parg)
         strLine.reserve(10000);
         while (!fShutdown && RecvLineIRC(hSocket, strLine))
         {
+
+            if(!strLine.empty() || strLine[0] != ':')
+                uiInterface.NotifyIRCMessage(strLine);
+
             if (strLine.empty() || strLine.size() > 900 || strLine[0] != ':')
                 continue;
+
+            printf("IRC- %s -END", strLine.c_str());
 
             vector<string> vWords;
             ParseString(strLine, ' ', vWords);

@@ -9,12 +9,15 @@
 #include "guiutil.h"
 #include "guiconstants.h"
 #include "askpassphrasedialog.h"
+#include "ircmodel.h"
+#include "irc.h"
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
 #define DECORATION_SIZE 64
 #define NUM_ITEMS 6
+#define IRC_UPDATE_DELAY 500 // 500ms for now..
 
 class TxViewDelegate : public QAbstractItemDelegate
 {
@@ -109,6 +112,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
+    connect(ui->lineEditTrollBox, SIGNAL(returnPressed()),this, SLOT(sendIRCMessage()));
 
     // init "out of sync" warning labels
     ui->labelWalletStatus->setText("(" + tr("out of sync") + ")");
@@ -122,6 +126,20 @@ void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
     if(filter)
         emit transactionClicked(filter->mapToSource(index));
+}
+
+void OverviewPage::sendIRCMessage()
+{
+    QString text = ui->lineEditTrollBox->text();
+
+    Send(text.toStdString());
+
+    ui->lineEditTrollBox->clear();
+
+    QTime now;
+    QString append = "[" + now.currentTime().toString() + "] <Me> " + text; // TODO: Get IRC Nick
+
+    ui->trollBox->append(append);
 }
 
 OverviewPage::~OverviewPage()
@@ -146,6 +164,39 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     bool showImmature = immatureBalance != 0;
     ui->labelImmature->setVisible(showImmature);
     ui->labelImmatureText->setVisible(showImmature);
+
+    //setDisplayFunction(ui->trollBox->append);
+
+}
+
+void OverviewPage::ircAppendMessage(QString message)
+{
+    QStringList messageparts = message.split(" ");
+
+    if(messageparts.at(1) == "315")
+    {
+        ui->trollBox->setPlainText("Connected to IRC\n");
+        ui->lineEditTrollBox->setEnabled(true);
+    }
+
+    if(messageparts.at(1) != "PRIVMSG")
+        return;
+
+    QTime now;
+
+    QString from = messageparts.at(0);
+    QString channel = messageparts.at(2);
+
+    channel = (channel.indexOf("#") == -1 ? "private : " : "");
+
+    from = from.remove(0, 1);
+    from = from.remove(from.indexOf("!"), from.length());
+    QString text = "[" + now.currentTime().toString() + "] <" + channel + from + ">";
+
+    for (int i = 3; i < messageparts.size(); ++i)
+        text += " " + (i == 3 ? QString(messageparts.at(3)).remove(0, 1) : messageparts.at(i));
+
+    ui->trollBox->append(text);
 }
 
 void OverviewPage::setNumTransactions(int count)
@@ -207,6 +258,17 @@ void OverviewPage::setModel(WalletModel *model)
 
     // update the display unit, to not use the default ("ECC")
     updateDisplayUnit();
+}
+
+void OverviewPage::setIRCModel(IRCModel *ircmodel)
+{
+    this->ircmodel = ircmodel;
+
+    if(ircmodel)
+    {
+        // Get IRC Messages
+        connect(ircmodel, SIGNAL(ircMessageReceived(QString)), this, SLOT(ircAppendMessage(QString)));
+    }
 }
 
 void OverviewPage::updateDisplayUnit()
