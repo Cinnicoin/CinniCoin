@@ -27,6 +27,8 @@ public:
     explicit IRCModel(OptionsModel *optionsModel, QObject *parent = 0);
     ~IRCModel();
 
+    OptionsModel *getOptionsModel();
+
 private:
     OptionsModel *optionsModel;
     //QTimer *pollTimer;

@@ -33,13 +33,10 @@ void IRCModel::ircReceiveMessage(QString message)
     emit ircMessageReceived(message);
 }
 
-
-/*
-void IRCModel::sendIRCMessage(std::string message)
+OptionsModel *IRCModel::getOptionsModel()
 {
-
+    return optionsModel;
 }
-*/
 
 static void NotifyIRCMessage(IRCModel *ircmodel, std::string message)
 {
