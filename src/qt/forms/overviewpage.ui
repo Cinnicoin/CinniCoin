@@ -278,9 +278,6 @@
      </item>
      <item>
       <widget class="QTextBrowser" name="trollBox">
-       <property name="styleSheet">
-        <string notr="true">{height:100%}</string>
-       </property>
        <property name="frameShadow">
         <enum>QFrame::Sunken</enum>
        </property>

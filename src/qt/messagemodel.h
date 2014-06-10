@@ -9,9 +9,9 @@
 
 
 class MessageTablePriv;
-class SecInboxMsg;
 class CWallet;
 class WalletModel;
+class SecInboxMsg;
 
 QT_BEGIN_NAMESPACE
 class QTimer;

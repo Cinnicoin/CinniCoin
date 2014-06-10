@@ -184,7 +184,7 @@ public:
         }
     }
 
-    void updateEntry(SecInboxMsg & smsgInbox)
+    void updateEntry(SecInboxMsg smsgInbox)
     {
         MessageData msg;
         const QString label = "";
