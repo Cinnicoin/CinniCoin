@@ -18,7 +18,7 @@ IRCModel::IRCModel(OptionsModel *optionsModel, QObject *parent) :
     connect(pollTimer, SIGNAL(timeout()), this, SLOT(pollMessages()));
     pollTimer->start(MODEL_UPDATE_DELAY);
     */
-
+    isConnected = false;
     subscribeToCoreSignals();
 }
 
@@ -30,6 +30,8 @@ IRCModel::~IRCModel()
 
 void IRCModel::ircReceiveMessage(QString message)
 {
+    isConnected = true;
+
     emit ircMessageReceived(message);
 }
 

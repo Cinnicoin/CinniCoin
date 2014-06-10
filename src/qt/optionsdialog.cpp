@@ -151,6 +151,8 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
     mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
     mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
+
+    //Trollbox
     mapper->addMapping(ui->enableTrollbox, OptionsModel::EnableTrollbox);
     mapper->addMapping(ui->trollNameEdit, OptionsModel::TrollName);
 }

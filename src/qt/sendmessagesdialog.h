@@ -33,6 +33,7 @@ public:
 
     void setModel (MessageModel *model);
     bool checkMode(Mode mode);
+    bool validate ();
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */

@@ -54,7 +54,7 @@
          <number>1</number>
         </property>
         <item>
-         <widget class="QLineEdit" name="addressFrom"/>
+         <widget class="QValidatedLineEdit" name="addressFrom"/>
         </item>
         <item>
          <widget class="QToolButton" name="addressBookButton">
@@ -238,6 +238,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QValidatedLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header>qvalidatedlineedit.h</header>
+  </customwidget>
+ </customwidgets>
  <resources>
   <include location="../bitcoin.qrc"/>
  </resources>

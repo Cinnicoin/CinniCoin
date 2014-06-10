@@ -137,7 +137,7 @@ void OverviewPage::sendIRCMessage()
     ui->lineEditTrollBox->clear();
 
     QTime now;
-    QString append = "[" + now.currentTime().toString() + "] <Me> " + text; // TODO: Get IRC Nick
+    QString append = "[" + now.currentTime().toString() + "] <" + ircmodel->getOptionsModel()->getTrollName() + "> " + text; // TODO: Get IRC Nick
 
     ui->trollBox->append(append);
 }
@@ -165,8 +165,6 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     ui->labelImmature->setVisible(showImmature);
     ui->labelImmatureText->setVisible(showImmature);
 
-    //setDisplayFunction(ui->trollBox->append);
-
 }
 
 void OverviewPage::ircAppendMessage(QString message)
@@ -177,6 +175,7 @@ void OverviewPage::ircAppendMessage(QString message)
     {
         ui->trollBox->setPlainText("Connected to IRC\n");
         ui->lineEditTrollBox->setEnabled(true);
+        updateTrollName();
     }
 
     if(messageparts.at(1) != "PRIVMSG")
@@ -267,9 +266,10 @@ void OverviewPage::setIRCModel(IRCModel *ircmodel)
     if(ircmodel)
     {
         // Get IRC Messages
-        connect(ircmodel, SIGNAL(ircMessageReceived(QString)), this, SLOT(ircAppendMessage(QString)));
         connect(ircmodel->getOptionsModel(), SIGNAL(enableTrollboxChanged(bool)), this, SLOT(enableTrollbox()));
         connect(ircmodel->getOptionsModel(), SIGNAL(trollNameChanged(QString)), this, SLOT(updateTrollName()));
+
+        enableTrollbox();
     }
 }
 
@@ -281,13 +281,17 @@ void OverviewPage::enableTrollbox()
 
         if(enableTrollbox)
         {
-            ui->trollBox->show();
-            ui->lineEditTrollBox->show();
+            disconnect(ircmodel, SIGNAL(ircMessageReceived(QString)), this, SLOT(ircAppendMessage(QString)));
+               connect(ircmodel, SIGNAL(ircMessageReceived(QString)), this, SLOT(ircAppendMessage(QString)));
+            ui->trollBox->setPlainText(QString::fromLocal8Bit(ircmodel->getIRCConnected() ? "Connected" : "Connecting") + " to IRC\n");
+            ui->trollBox->setEnabled(true);
+            ui->lineEditTrollBox->setEnabled(true);
         }
         else
         {
-            ui->trollBox->hide();
-            ui->lineEditTrollBox->hide();
+            disconnect(ircmodel, SIGNAL(ircMessageReceived(QString)), this, SLOT(ircAppendMessage(QString)));
+            ui->trollBox->setEnabled(false);
+            ui->lineEditTrollBox->setEnabled(false);
         }
     }
 }

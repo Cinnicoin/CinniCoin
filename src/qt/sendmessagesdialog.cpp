@@ -63,6 +63,18 @@ bool SendMessagesDialog::checkMode(Mode mode)
     return (mode == this->mode);
 }
 
+bool SendMessagesDialog::validate()
+{
+    if(mode == SendMessagesDialog::Encrypted && ui->addressFrom->text() == "")
+    {
+        ui->addressFrom->setValid(false);
+
+        return false;
+    }
+
+    return true;
+}
+
 SendMessagesDialog::~SendMessagesDialog()
 {
     delete ui;
@@ -100,6 +112,8 @@ void SendMessagesDialog::on_sendButton_clicked()
     if(!model)
         return;
 
+    valid = validate();
+
     for(int i = 0; i < ui->entries->count(); ++i)
     {
         SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
@@ -135,14 +149,14 @@ void SendMessagesDialog::on_sendButton_clicked()
         return;
     }
 
-    MessageModel::SendMessagesReturn sendstatus;
+    MessageModel::StatusCode sendstatus;
 
     if(mode == SendMessagesDialog::Anonymous)
         sendstatus = model->sendMessages(recipients);
     else
         sendstatus = model->sendMessages(recipients, ui->addressFrom->text());
 
-    switch(sendstatus.status)
+    switch(sendstatus)
     {
     case MessageModel::InvalidAddress:
         QMessageBox::warning(this, tr("Send Message"),
