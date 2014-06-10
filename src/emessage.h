@@ -16,6 +16,8 @@ const unsigned int SMSG_RETENTION  = 60 * 60 * 2; // in seconds
 
 const unsigned int SMSG_TIME_LEEWAY = 30;
 
+const unsigned int SMSG_MAX_MSG_BYTES = 2048; // the user input part
+
 
 /** Inbox db changed.
  * @note called with lock cs_smsgInbox held.
@@ -113,10 +115,18 @@ class CSmesgInboxDB : public CDB
 public:
     CSmesgInboxDB(const char* pszMode="r+") : CDB("smsgInbox.dat", pszMode) { }
     
+    Dbt datKey;
+    Dbt datValue;
+
+    std::vector<unsigned char> vchKeyData;
+    std::vector<unsigned char> vchValueData;
+    
     Dbc* GetAtCursor()
     {
         return GetCursor();
     }
+    
+    bool NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecInboxMsg& smsgInbox);
     
     bool ReadUnread(std::vector<unsigned char>& vchUnread)
     {
@@ -175,10 +185,19 @@ class CSmesgOutboxDB : public CDB
 public:
     CSmesgOutboxDB(const char* pszMode="r+") : CDB("smsgOutbox.dat", pszMode) { }
     
+    Dbt datKey;
+    Dbt datValue;
+
+    std::vector<unsigned char> vchKeyData;
+    std::vector<unsigned char> vchValueData;
+    
     Dbc* GetAtCursor()
     {
         return GetCursor();
     }
+    
+    bool NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgOutbox);
+    
     
     bool ReadSmesg(std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgob)
     {
@@ -257,7 +276,7 @@ int SecureMsgReceive(std::vector<unsigned char>& vchData);
 int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool fUpdateBucket);
 int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
 
-int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message);
+int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message, std::string& sError);
 
 int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string& addressTo, std::string& message);
 

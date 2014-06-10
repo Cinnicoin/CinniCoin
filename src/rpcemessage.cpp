@@ -227,9 +227,12 @@ Value smsgsend(const Array& params, bool fHelp)
     
     Object result;
     
-    if (SecureMsgSend(addrFrom, addrTo, msg) != 0)
+    std::string sError;
+    if (SecureMsgSend(addrFrom, addrTo, msg, sError) != 0)
+    {
         result.push_back(Pair("result", "Send failed."));
-    else
+        result.push_back(Pair("error", sError));
+    } else
         result.push_back(Pair("result", "Sent."));
 
     return result;
@@ -251,10 +254,12 @@ Value smsgsendanon(const Array& params, bool fHelp)
     
     
     Object result;
-    
-    if (SecureMsgSend(addrFrom, addrTo, msg) != 0)
+    std::string sError;
+    if (SecureMsgSend(addrFrom, addrTo, msg, sError) != 0)
+    {
         result.push_back(Pair("result", "Send failed."));
-    else
+        result.push_back(Pair("error", sError));
+    } else
         result.push_back(Pair("result", "Sent."));
 
     return result;
@@ -455,72 +460,14 @@ Value smsginbox(const Array& params, bool fHelp)
             
             uint32_t nMessages = 0;
             
-            Dbt datKey;
-            Dbt datValue;
+            SecInboxMsg smsgInbox;
+            unsigned int fFlags = DB_FIRST;
             
-            datKey.set_flags(DB_DBT_USERMEM);
-            datValue.set_flags(DB_DBT_USERMEM);
-            
-            std::vector<unsigned char> vchKeyData;
-            std::vector<unsigned char> vchValueData;
-            
-            vchKeyData.resize(100);
-            vchValueData.resize(100);
-            
-            datKey.set_ulen(vchKeyData.size());
-            datKey.set_data(&vchKeyData[0]);
-            
-            datValue.set_ulen(vchValueData.size());
-            datValue.set_data(&vchValueData[0]);
-            
-            unsigned int fFlags = DB_NEXT; // same as using DB_FIRST for new cursor
-            while (true)
+            while (dbInbox.NextSmesg(pcursor, fFlags, vchKey, smsgInbox))
             {
-                int ret = pcursor->get(&datKey, &datValue, fFlags);
-                
-                if (ret == ENOMEM
-                    || ret == DB_BUFFER_SMALL)
-                {
-                    if (datKey.get_size() > datKey.get_ulen())
-                    {
-                        //printf("Resizing vchKeyData %d\n", datKey.get_size());
-                        vchKeyData.resize(datKey.get_size());
-                        datKey.set_ulen(vchKeyData.size());
-                        datKey.set_data(&vchKeyData[0]);
-                    };
-                    
-                    if (datValue.get_size() > datValue.get_ulen())
-                    {
-                        //printf("Resizing vchValueData %d\n", datValue.get_size());
-                        vchValueData.resize(datValue.get_size());
-                        datValue.set_ulen(vchValueData.size());
-                        datValue.set_data(&vchValueData[0]);
-                    };
-                    // try once more, when DB_BUFFER_SMALL cursor is not expected to move
-                    ret = pcursor->get(&datKey, &datValue, fFlags);
-                };
-                
-                if (ret == DB_NOTFOUND)
-                    break;
-                else
-                if (datKey.get_data() == NULL || datValue.get_data() == NULL
-                    || ret != 0)
-                {
-                    snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s\n", ret, db_strerror(ret));
-                    throw runtime_error(cbuf);
-                };
-                
-                if (datKey.get_size() != 17)
-                    continue; // not a message key
+                fFlags = DB_NEXT;
                 
                 nMessages++;
-                // must be a better way?
-                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-                ssValue.SetType(SER_DISK);
-                ssValue.clear();
-                ssValue.write((char*)datValue.get_data(), datValue.get_size());
-                SecInboxMsg smsgInbox;
-                ssValue >> smsgInbox;
                 
                 MessageData msg;
                 
@@ -701,74 +648,14 @@ Value smsgoutbox(const Array& params, bool fHelp)
             
             uint32_t nMessages = 0;
             
-            Dbt datKey;
-            Dbt datValue;
+            SecOutboxMsg smsgOutbox;
+            unsigned int fFlags = DB_FIRST;
             
-            datKey.set_flags(DB_DBT_USERMEM);
-            datValue.set_flags(DB_DBT_USERMEM);
-            
-            std::vector<unsigned char> vchKeyData;
-            std::vector<unsigned char> vchValueData;
-            
-            vchKeyData.resize(100);
-            vchValueData.resize(100);
-            
-            datKey.set_ulen(vchKeyData.size());
-            datKey.set_data(&vchKeyData[0]);
-            
-            datValue.set_ulen(vchValueData.size());
-            datValue.set_data(&vchValueData[0]);
-            
-            unsigned int fFlags = DB_NEXT; // same as using DB_FIRST for new cursor
-            while (true)
+            while (dbOutbox.NextSmesg(pcursor, fFlags, vchKey, smsgOutbox))
             {
-                int ret = pcursor->get(&datKey, &datValue, fFlags);
-                
-                if (ret == ENOMEM
-                    || ret == DB_BUFFER_SMALL)
-                {
-                    if (datKey.get_size() > datKey.get_ulen())
-                    {
-                        printf("Resizing vchKeyData %d\n", datKey.get_size());
-                        vchKeyData.resize(datKey.get_size());
-                        datKey.set_ulen(vchKeyData.size());
-                        datKey.set_data(&vchKeyData[0]);
-                    };
-                    
-                    if (datValue.get_size() > datValue.get_ulen())
-                    {
-                        printf("Resizing vchValueData %d\n", datValue.get_size());
-                        vchValueData.resize(datValue.get_size());
-                        datValue.set_ulen(vchValueData.size());
-                        datValue.set_data(&vchValueData[0]);
-                    };
-                    // try once more, when DB_BUFFER_SMALL cursor is not expected to move
-                    ret = pcursor->get(&datKey, &datValue, fFlags);
-                };
-                
-                if (ret == DB_NOTFOUND)
-                    break;
-                else
-                if (datKey.get_data() == NULL || datValue.get_data() == NULL
-                    || ret != 0)
-                {
-                    snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s\n", ret, db_strerror(ret));
-                    throw runtime_error(cbuf);
-                };
-                
-                if (datKey.get_size() != 17)
-                    continue; // not a message key
+                fFlags = DB_NEXT;
                 
                 nMessages++;
-                // must be a better way?
-                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-                ssValue.SetType(SER_DISK);
-                ssValue.clear();
-                ssValue.write((char*)datValue.get_data(), datValue.get_size());
-                
-                SecOutboxMsg smsgOutbox;
-                ssValue >> smsgOutbox;
-                
                 MessageData msg;
                 
                 uint32_t nPayload = smsgOutbox.vchMessage.size() - SMSG_HDR_LEN;

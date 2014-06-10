@@ -20,6 +20,7 @@ Notes:
 #include <time.h>
 #include <map>
 #include <stdexcept>
+#include <sstream>
 #include <errno.h>
 
 #include <openssl/crypto.h>
@@ -31,6 +32,7 @@ Notes:
 #include <openssl/hmac.h>
 
 #include <boost/lexical_cast.hpp>
+
 
 #include "base58.h"
 #include "db.h"
@@ -151,6 +153,144 @@ void SecMsgBucket::hashBucket()
     if (fDebugSmsg)
         printf("setTokens.size() %lu, hash %u\n", setTokens.size(), hash);
 };
+
+bool CSmesgInboxDB::NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecInboxMsg& smsgInbox)
+{
+    datKey.set_flags(DB_DBT_USERMEM);
+    datValue.set_flags(DB_DBT_USERMEM);
+    
+    
+    datKey.set_ulen(vchKeyData.size());
+    datKey.set_data(&vchKeyData[0]);
+
+    datValue.set_ulen(vchValueData.size());
+    datValue.set_data(&vchValueData[0]);
+    
+    while (true) // Must loop, as want to return only message keys
+    {
+        int ret = pcursor->get(&datKey, &datValue, fFlags);
+        //printf("inbox DB ret %d, %s\n", ret, db_strerror(ret));
+        if (ret == ENOMEM
+         || ret == DB_BUFFER_SMALL)
+        {
+            if (datKey.get_size() > datKey.get_ulen())
+            {
+                vchKeyData.resize(datKey.get_size());
+                datKey.set_ulen(vchKeyData.size());
+                datKey.set_data(&vchKeyData[0]);
+            };
+
+            if (datValue.get_size() > datValue.get_ulen())
+            {
+                //printf("Resizing vchValueData %d\n", datValue.get_size());
+                vchValueData.resize(datValue.get_size());
+                datValue.set_ulen(vchValueData.size());
+                datValue.set_data(&vchValueData[0]);
+            };
+            // try once more, when DB_BUFFER_SMALL cursor is not expected to move
+            ret = pcursor->get(&datKey, &datValue, fFlags);
+        };
+
+        if (ret == DB_NOTFOUND)
+            return false;
+        else
+        if (datKey.get_data() == NULL || datValue.get_data() == NULL || ret != 0)
+        {
+            printf("CSmesgInboxDB::NextSmesg(), DB error %d, %s\n", ret, db_strerror(ret));
+            return false;
+        };
+
+        if (datKey.get_size() != 17)
+        {
+            fFlags = DB_NEXT; // don't want to loop forever
+            continue; // not a message key
+        }
+        // must be a better way?
+        CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+        ssValue.SetType(SER_DISK);
+        ssValue.clear();
+        ssValue.write((char*)datKey.get_data(), datKey.get_size());
+        ssValue >> vchKey;
+        //SecOutboxMsg smsgOutbox;
+        ssValue.clear();
+        ssValue.write((char*)datValue.get_data(), datValue.get_size());
+        ssValue >> smsgInbox;
+        break;
+    }
+    
+    return true;
+};
+
+
+bool CSmesgOutboxDB::NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgOutbox)
+{
+    datKey.set_flags(DB_DBT_USERMEM);
+    datValue.set_flags(DB_DBT_USERMEM);
+    
+    
+    datKey.set_ulen(vchKeyData.size());
+    datKey.set_data(&vchKeyData[0]);
+
+    datValue.set_ulen(vchValueData.size());
+    datValue.set_data(&vchValueData[0]);
+    
+    while (true) // Must loop, as want to return only message keys
+    {
+        int ret = pcursor->get(&datKey, &datValue, fFlags);
+        //printf("inbox DB ret %d, %s\n", ret, db_strerror(ret));
+        if (ret == ENOMEM
+         || ret == DB_BUFFER_SMALL)
+        {
+            if (datKey.get_size() > datKey.get_ulen())
+            {
+                vchKeyData.resize(datKey.get_size());
+                datKey.set_ulen(vchKeyData.size());
+                datKey.set_data(&vchKeyData[0]);
+            };
+
+            if (datValue.get_size() > datValue.get_ulen())
+            {
+                //printf("Resizing vchValueData %d\n", datValue.get_size());
+                vchValueData.resize(datValue.get_size());
+                datValue.set_ulen(vchValueData.size());
+                datValue.set_data(&vchValueData[0]);
+            };
+            // try once more, when DB_BUFFER_SMALL cursor is not expected to move
+            ret = pcursor->get(&datKey, &datValue, fFlags);
+        };
+
+        if (ret == DB_NOTFOUND)
+            return false;
+        else
+        if (datKey.get_data() == NULL || datValue.get_data() == NULL || ret != 0)
+        {
+            printf("CSmesgOutboxDB::NextSmesg(), DB error %d, %s\n", ret, db_strerror(ret));
+            return false;
+        };
+
+        if (datKey.get_size() != 17)
+        {
+            fFlags = DB_NEXT; // don't want to loop forever
+            continue; // not a message key
+        }
+        // must be a better way?
+        CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+        ssValue.SetType(SER_DISK);
+        ssValue.clear();
+        ssValue.write((char*)datKey.get_data(), datKey.get_size());
+        ssValue >> vchKey;
+        //SecOutboxMsg smsgOutbox;
+        ssValue.clear();
+        ssValue.write((char*)datValue.get_data(), datValue.get_size());
+        ssValue >> smsgOutbox;
+        break;
+    }
+    
+    return true;
+};
+
+
+
 
 
 void ThreadSecureMsg(void* parg)
@@ -1552,15 +1692,27 @@ int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket)
 int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string& addressTo, std::string& message)
 {
     /* Create a secure message
+    
+        returns
+            2       message is too long.
+            3       addressFrom is invalid.
+            4       addressTo is invalid.
+            5       Could not get public key for addressTo.
+            6       ECDH_compute_key failed
+            7       Could not get private key for addressFrom.
+            8       Could not allocate memory.
+            9       Could not compress message data.
+            10      Could not generate MAC.
+            11      Encrypt failed.
     */
     
     if (fDebugSmsg)
         printf("SecureMsgEncrypt(%s, %s, ...)\n", addressFrom.c_str(), addressTo.c_str());
     
-    if (message.size() > 2048)
+    if (message.size() > SMSG_MAX_MSG_BYTES)
     {
         printf("Message is too long, %lu.\n", message.size());
-        return 1;
+        return 2;
     };
     
     smsg.version = 1;
@@ -1585,13 +1737,13 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
         if (!coinAddrFrom.SetString(addressFrom))
         {
             printf("addressFrom is not valid.\n");
-            return 1;
+            return 3;
         };
         
         if (!coinAddrFrom.GetKeyID(ckidFrom))
         {
             printf("coinAddrFrom.GetKeyID failed: %s.\n", coinAddrFrom.ToString().c_str());
-            return 1;
+            return 3;
         };
     };
     
@@ -1602,14 +1754,14 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     if (!coinAddrDest.SetString(addressTo))
     {
         printf("addressTo is not valid.\n");
-        return 1;
+        return 4;
     };
     
     //printf("coinAddrDest: %s.\n", coinAddrDest.ToString().c_str());
     if (!coinAddrDest.GetKeyID(ckidDest))
     {
         printf("coinAddrDest.GetKeyID failed: %s.\n", coinAddrDest.ToString().c_str());
-        return 1;
+        return 4;
     };
     
     // -- public key K is the destination address
@@ -1620,7 +1772,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
         if (SecureMsgGetLocalKey(ckidDest, cpkDestK) != 0)
         {
             printf("Could not get public key for destination address.\n");
-            return 1;
+            return 5;
         };
     };
     
@@ -1644,7 +1796,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     if (!keyK.SetPubKey(cpkDestK))
     {
         printf("Could not set pubkey for K: %s.\n", ValueString(cpkDestK.Raw()).c_str());
-        return 1;
+        return 4; // address to is invalid
     };
     
     std::vector<unsigned char> vchP;
@@ -1664,7 +1816,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     if (lenP != 32)
     {
         printf("ECDH_compute_key failed, lenP: %d.\n", lenP);
-        return 1;
+        return 6;
     };
     
     //printf("lenP: %d.\n", lenP);
@@ -1711,14 +1863,12 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     {
         // -- only compress if over 128 bytes
         int worstCase = LZ4_compressBound(message.size());
-        //printf("worstCase: %d.\n", worstCase);
         vchCompressed.resize(worstCase);
         int lenComp = LZ4_compress((char*)message.c_str(), (char*)&vchCompressed[0], lenMsg);
-        //printf("lenComp: %d.\n", lenComp);
         if (lenComp < 1)
         {
             printf("Could not compress message data.\n");
-            return 1;
+            return 9;
         };
         
         pMsgData = &vchCompressed[0];
@@ -1746,7 +1896,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
         if (!pwalletMain->GetKey(ckidFrom, keyFrom))
         {
             printf("Could not get private key for addressFrom.\n");
-            return 4;
+            return 7;
         };
         
         // -- sign the plaintext
@@ -1770,15 +1920,17 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     std::vector<unsigned char> vchCiphertext;
     
     if (!crypter.Encrypt(&vchPayload[0], vchPayload.size(), vchCiphertext))
+    {
         printf("crypter.Encrypt failed.\n");
-    
+        return 11;
+    };
     
     try {
         smsg.pPayload = new unsigned char[vchCiphertext.size()];
     } catch (std::exception& e)
     {
         printf("Could not allocate pPayload, exception: %s.\n", e.what());
-        return 1;
+        return 8;
     };
     
     memcpy(smsg.pPayload, &vchCiphertext[0], vchCiphertext.size());
@@ -1807,7 +1959,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     if (!fHmacOk)
     {
         printf("Could not generate MAC.\n");
-        return 1;
+        return 10;
     };
     
     // todo hash checksum
@@ -1815,7 +1967,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     return 0;
 }
 
-int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message)
+int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message, std::string& sError)
 {
     /* Encrypt secure message, and place it on the network
         Make a copy of the message to sender's first address and place in outbox
@@ -1833,8 +1985,11 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     if (fDebugSmsg)
         printf("SecureMsgSend(%s, %s, ...)\n", addressFrom.c_str(), addressTo.c_str());
     
-    if (message.size() > 2048)
+    if (message.size() > SMSG_MAX_MSG_BYTES)
     {
+        std::ostringstream oss;
+        oss << message.size() << " > " << SMSG_MAX_MSG_BYTES;
+        sError = "Message is too long, " + oss.str();
         printf("Message is too long, %lu.\n", message.size());
         return 1;
     };
@@ -1846,13 +2001,33 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     if ((rv = SecureMsgEncrypt(smsg, addressFrom, addressTo, message)) != 0)
     {
         printf("SecureMsgSend(), encrypt for recipient failed.\n");
+        
+        switch(rv)
+        {
+            case 2:  sError = "Message is too long.";                       break;
+            case 3:  sError = "Invalid addressFrom.";                       break;
+            case 4:  sError = "Invalid addressTo.";                         break;
+            case 5:  sError = "Could not get public key for addressTo.";    break;
+            case 6:  sError = "ECDH_compute_key failed.";                   break;
+            case 7:  sError = "Could not get private key for addressFrom."; break;
+            case 8:  sError = "Could not allocate memory.";                 break;
+            case 9:  sError = "Could not compress message data.";           break;
+            case 10: sError = "Could not generate MAC.";                    break;
+            case 11: sError = "Encrypt failed.";                            break;
+            default: sError = "Unspecified Error.";                         break;
+        };
+        
         return rv;
     };
     
     // -- add to message store
     {
         LOCK(cs_smsg);
-        SecureMsgStore(smsg, true);
+        if (SecureMsgStore(smsg, true) != 0)
+        {
+            sError = "Could not store message.";
+            return 1;
+        };
     }
     
     // -- test if message was sent to self
@@ -1863,8 +2038,8 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     
     
-    
-    
+    if (fDebugSmsg)
+        printf("Encrypting message for outbox.\n");
     //  -- for outbox create a copy encrypted for owned address
     //     if the wallet is encrypted private key needed to decrypt will be unavailable
     
@@ -1886,6 +2061,8 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
         break;
     };
     
+    if (fDebugSmsg)
+        printf("Encrypting a copy for outbox, using address %s\n", addressOutbox.c_str());
     
     SecureMessage smsgForOutbox;
     if ((rv = SecureMsgEncrypt(smsgForOutbox, addressFrom, addressOutbox, message)) != 0)

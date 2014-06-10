@@ -7,6 +7,7 @@
 #include <map>
 #include <QAbstractTableModel>
 #include <QStringList>
+#include <QDateTime>
 
 
 class MessageTablePriv;
@@ -24,6 +25,27 @@ public:
     QString label;
     QString pubkey;
     QString message;
+};
+
+struct MessageTableEntry
+{
+    enum Type {
+        Sent,
+        Received
+    };
+
+    std::vector<unsigned char> vchKey;
+    Type type;
+    QString label;
+    QString to_address;
+    QString from_address;
+    QDateTime sent_datetime;
+    QDateTime received_datetime;
+    QString message;
+
+    MessageTableEntry() {}
+    MessageTableEntry(const std::vector<unsigned char> vchKey, Type type, const QString &label, const QString &to_address, const QString &from_address, const QDateTime &sent_datetime, const QDateTime &received_datetime, const QString &message):
+        vchKey(vchKey), type(type), label(label), to_address(to_address), from_address(from_address), sent_datetime(sent_datetime), received_datetime(received_datetime), message(message) {}
 };
 
 /** Interface to Cinnicoin Secure Messaging from Qt view code. */
@@ -53,7 +75,8 @@ public:
         Label = 3,   /**< User specified label */
         ToAddress = 4, /**< To Bitcoin address */
         FromAddress = 5, /**< From Bitcoin address */
-        Message = 6, /**< From Bitcoin address */
+        Message = 6, /**< Plaintext */
+        TypeInt = 7,
     };
 
     enum RoleIndex {
@@ -105,7 +128,9 @@ public slots:
 
     /* Check for new messages */
     void pollMessages();
-    void newMessage(const SecInboxMsg &smsgInbox);
+    void newMessage(const SecInboxMsg& smsgInbox);
+    void newOutboxMessage(const SecOutboxMsg& smsgOutbox);
+    
 
     friend class MessageTablePriv;
 
