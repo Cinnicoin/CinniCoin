@@ -71,7 +71,7 @@ public:
     //bool setData(const QModelIndex & index, const QVariant & value, int role);
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent) const;
-    //bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
+    bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
     Qt::ItemFlags flags(const QModelIndex & index) const;
     /*@}*/
 
@@ -87,19 +87,9 @@ public:
     int getNumUnreadMessages() const;
     bool getAddressOrPubkey( QString &Address,  QString &Pubkey) const;
 
-    // Return status record for SendMessages, contains error id + information
-    struct SendMessagesReturn
-    {
-        SendMessagesReturn(StatusCode status=Aborted,
-                           QString hex=QString()):
-            status(status), hex(hex) {}
-        StatusCode status;
-        QString hex; // is filled with the message hash if status is "OK"
-    };
-
     // Send messages to a list of recipients
-    SendMessagesReturn sendMessages(const QList<SendMessagesRecipient> &recipients);
-    SendMessagesReturn sendMessages(const QList<SendMessagesRecipient> &recipients, const QString &addressFrom);
+    StatusCode sendMessages(const QList<SendMessagesRecipient> &recipients);
+    StatusCode sendMessages(const QList<SendMessagesRecipient> &recipients, const QString &addressFrom);
 
 private:
     CWallet *wallet;
@@ -115,7 +105,7 @@ public slots:
 
     /* Check for new messages */
     void pollMessages();
-    void updateEntry(const SecInboxMsg &smsgInbox);
+    void newMessage(const SecInboxMsg &smsgInbox);
 
     friend class MessageTablePriv;
 

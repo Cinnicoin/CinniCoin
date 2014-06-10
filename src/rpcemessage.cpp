@@ -368,7 +368,6 @@ Value smsginbox(const Array& params, bool fHelp)
                 ssValue.SetType(SER_DISK);
                 ssValue.clear();
                 ssValue.write((char*)datKey.get_data(), datKey.get_size());
-                //SecInboxMsg smsgInbox;
                 ssValue >> vchKey;
                 
                 setToDelete.insert(vchKey);
@@ -402,7 +401,7 @@ Value smsginbox(const Array& params, bool fHelp)
         if (mode == "unread")
         {
             SecInboxMsg smsgInbox;
-            
+
             //dbInbox.WriteSmesg(vchKey, vchData);
             
             dbInbox.ReadUnread(vchUnread);

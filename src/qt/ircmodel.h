@@ -12,12 +12,6 @@ QT_BEGIN_NAMESPACE
 class QTimer;
 QT_END_NAMESPACE
 
-class SendIRCMessage
-{
-public:
-    std::string message;
-};
-
 /** Interface to Cinnicoin Secure Messaging from Qt view code. */
 class IRCModel : public QObject
 {
@@ -28,6 +22,7 @@ public:
     ~IRCModel();
 
     OptionsModel *getOptionsModel();
+    bool getIRCConnected() {return isConnected;}
 
 private:
     OptionsModel *optionsModel;
@@ -35,6 +30,7 @@ private:
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
+    bool isConnected;
 
 public slots:
     void ircReceiveMessage(QString message);

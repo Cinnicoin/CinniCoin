@@ -31,9 +31,9 @@ public:
         DetachDatabases,   // bool
         Language,          // QString
         CoinControlFeatures, // bool
-        OptionIDRowCount,
         EnableTrollbox, // bool
         TrollName, // QString
+        OptionIDRowCount,
     };
 
     void Init();
