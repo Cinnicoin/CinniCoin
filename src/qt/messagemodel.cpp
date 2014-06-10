@@ -4,7 +4,6 @@
 #include "messagemodel.h"
 
 #include "ui_interface.h"
-#include "emessage.h"
 #include "base58.h"
 
 #include <QSet>
@@ -60,12 +59,11 @@ struct MessageTableEntryLessThan
 class MessageTablePriv
 {
 public:
-    CWallet *wallet;
     QList<MessageTableEntry> cachedMessageTable;
     MessageModel *parent;
 
-    MessageTablePriv(CWallet *wallet, MessageModel *parent):
-        wallet(wallet), parent(parent) {}
+    MessageTablePriv(MessageModel *parent):
+        parent(parent) {}
 
     void refreshMessageTable()
     {
@@ -184,8 +182,11 @@ public:
         }
     }
 
-    void updateEntry(SecInboxMsg smsgInbox)
+    void updateEntry(const SecInboxMsg & inboxHdr)
     {
+        // we have to copy it, because it doesn't like constants going into Decrypt
+        SecInboxMsg smsgInbox = inboxHdr;
+
         MessageData msg;
         const QString label = "";
 
@@ -198,14 +199,20 @@ public:
             sent_datetime    .setTime_t(msg.timestamp);
             received_datetime.setTime_t(smsgInbox.timeReceived);
 
-            cachedMessageTable.append(
-                MessageTableEntry(MessageTableEntry::Received,
-                                  label,
-                                  QString::fromStdString(smsgInbox.sAddrTo),
-                                  QString::fromStdString(msg.sFromAddress),
-                                  sent_datetime,
-                                  received_datetime,
-                                  QString((char*)&msg.vchMessage[0])));
+            // Find address / label in model
+            QList<MessageTableEntry>::iterator lower = qLowerBound(
+                cachedMessageTable.begin(), cachedMessageTable.end(), QString::fromStdString(smsgInbox.sAddrTo), MessageTableEntryLessThan());
+            int lowerIndex = (lower - cachedMessageTable.begin());
+
+            parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
+            cachedMessageTable.insert(lowerIndex, MessageTableEntry(MessageTableEntry::Received,
+                                                                    label,
+                                                                    QString::fromStdString(smsgInbox.sAddrTo),
+                                                                    QString::fromStdString(msg.sFromAddress),
+                                                                    sent_datetime,
+                                                                    received_datetime,
+                                                                    QString((char*)&msg.vchMessage[0])));
+            parent->endInsertRows();
         }
     }
 
@@ -233,7 +240,7 @@ MessageModel::MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *p
 {
 
     columns << tr("Type") << tr("Sent Date Time") << tr("Recieved Date Time") << tr("Label") << tr("To Address") << tr("From Address") << tr("Message");
-    priv = new MessageTablePriv(wallet, this);
+    priv = new MessageTablePriv(this);
     priv->refreshMessageTable();
 
     // This timer will be fired repeatedly to check for messages
@@ -477,13 +484,13 @@ QModelIndex MessageModel::index(int row, int column, const QModelIndex & parent)
     }
 }
 
-void MessageModel::updateEntry(SecInboxMsg & smsgInbox)
+void MessageModel::updateEntry(const SecInboxMsg &smsgInbox)
 {
-    // Update address book model from Bitcoin core
     priv->updateEntry(smsgInbox);
+    //priv->refreshMessageTable();
 }
 
-static void NotifySecMsgInbox(MessageModel *messageModel, SecInboxMsg &inboxHdr)
+static void NotifySecMsgInbox(MessageModel *messageModel, SecInboxMsg inboxHdr)
 {
     // Too noisy: OutputDebugStringF("NotifySecMsgInboxChanged %s\n", message);
     QMetaObject::invokeMethod(messageModel, "updateEntry", Qt::QueuedConnection,
@@ -492,6 +499,7 @@ static void NotifySecMsgInbox(MessageModel *messageModel, SecInboxMsg &inboxHdr)
 
 void MessageModel::subscribeToCoreSignals()
 {
+    qRegisterMetaType<SecInboxMsg>("SecInboxMsg");
     // Connect signals to irc
     NotifySecMsgInboxChanged.connect(boost::bind(NotifySecMsgInbox, this, _1));
 }

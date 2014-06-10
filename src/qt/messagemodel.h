@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "allocators.h" /* for SecureString */
+#include "emessage.h"
 #include <map>
 #include <QAbstractTableModel>
 #include <QStringList>
@@ -11,7 +12,6 @@
 class MessageTablePriv;
 class CWallet;
 class WalletModel;
-class SecInboxMsg;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
@@ -115,7 +115,7 @@ public slots:
 
     /* Check for new messages */
     void pollMessages();
-    void updateEntry(SecInboxMsg & smsgInbox);
+    void updateEntry(const SecInboxMsg &smsgInbox);
 
     friend class MessageTablePriv;
 

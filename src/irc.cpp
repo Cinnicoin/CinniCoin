@@ -355,8 +355,6 @@ void ThreadIRCSeed2(void* parg)
             if (strLine.empty() || strLine.size() > 900 || strLine[0] != ':')
                 continue;
 
-            printf("IRC- %s -END", strLine.c_str());
-
             vector<string> vWords;
             ParseString(strLine, ' ', vWords);
             if (vWords.size() < 2)
