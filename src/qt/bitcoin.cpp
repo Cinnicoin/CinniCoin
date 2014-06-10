@@ -211,7 +211,6 @@ int main(int argc, char *argv[])
     app.processEvents();
 
     app.setQuitOnLastWindowClosed(false);
-
     try
     {
         // Regenerate startup link, to fix links to old versions
@@ -220,6 +219,7 @@ int main(int argc, char *argv[])
 
         BitcoinGUI window;
         guiref = &window;
+
         if(AppInit2())
         {
             {
