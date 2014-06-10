@@ -23,6 +23,12 @@ const unsigned int SMSG_TIME_LEEWAY = 30;
 class SecInboxMsg;
 extern boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
 
+/** Outbox db changed.
+ * @note called with lock cs_smsgOutbox held.
+ */
+class SecOutboxMsg;
+extern boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutboxChanged;
+
 extern std::map<int64_t, SecMsgBucket> smsgSets;
 extern CCriticalSection cs_smsg; // all except inbox and outbox
 extern CCriticalSection cs_smsgInbox;
@@ -99,10 +105,8 @@ public:
         READWRITE(this->timeReceived);
         READWRITE(this->sAddrTo);
         READWRITE(this->vchMessage);
-    )
-        
+    );
 };
-
 
 class CSmesgInboxDB : public CDB
 {
@@ -147,24 +151,53 @@ public:
     }
 };
 
+
+class SecOutboxMsg
+{
+public:
+    
+    int64_t                         timeReceived;
+    std::string                     sAddrTo;        // address copy of message was sent to
+    std::string                     sAddrOutbox;    // owned address this copy was encrypted with
+    std::vector<unsigned char>      vchMessage;
+    
+    IMPLEMENT_SERIALIZE
+    (
+        READWRITE(this->timeReceived);
+        READWRITE(this->sAddrTo);
+        READWRITE(this->sAddrOutbox);
+        READWRITE(this->vchMessage);
+    );
+};
+
 class CSmesgOutboxDB : public CDB
 {
 public:
     CSmesgOutboxDB(const char* pszMode="r+") : CDB("smsgOutbox.dat", pszMode) { }
     
-    bool ReadPK(CKeyID& addr, CPubKey& pubkey)
+    Dbc* GetAtCursor()
     {
-        return Read(addr, pubkey);
+        return GetCursor();
     }
     
-    bool WritePK(CKeyID& addr, CPubKey& pubkey)
+    bool ReadSmesg(std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgob)
     {
-        return Write(addr, pubkey);
+        return Read(vchKey, smsgob);
     }
     
-    bool ExistsPK(CKeyID& addr)
+    bool WriteSmesg(std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgob)
     {
-        return Exists(addr);
+        return Write(vchKey, smsgob);
+    }
+    
+    bool ExistsSmesg(std::vector<unsigned char>& vchKey)
+    {
+        return Exists(vchKey);
+    }
+    
+    bool EraseSmesg(std::vector<unsigned char>& vchKey)
+    {
+        return Erase(vchKey);
     }
 };
 
@@ -191,6 +224,8 @@ public:
 
 
 std::string getTimeString(int64_t timestamp, char *buffer, size_t nBuffer);
+std::string fsReadable(uint64_t nBytes);
+
 
 
 bool SecureMsgStart(bool fScanChain);
@@ -207,9 +242,12 @@ bool SecureMsgScanBlockChain();
 
 int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
 
-int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
 
-int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
+int SecureMsgGetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
+
+int SecureMsgGetLocalKey(CKeyID& ckid, CPubKey& cpkOut);
+
+int SecureMsgGetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
 int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData);
@@ -220,6 +258,8 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
 int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
 
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message);
+
+int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string& addressTo, std::string& message);
 
 int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, MessageData& msg);
 int SecureMsgDecrypt(bool fTestOnly, std::string& address, SecureMessage& smsg, MessageData& msg);

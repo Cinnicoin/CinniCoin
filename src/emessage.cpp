@@ -45,6 +45,7 @@ Notes:
 // TODO: For buckets older than current, only need to store length and hash in memory
 
 boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
+boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutboxChanged;
 
 std::map<int64_t, SecMsgBucket> smsgSets;
 
@@ -193,8 +194,14 @@ void ThreadSecureMsg(void* parg)
                     std::string fileName = boost::lexical_cast<std::string>(it->first) + "_01.dat";
                     fs::path fullPath = GetDataDir() / "smsgStore" / fileName;
                     if (fs::exists(fullPath))
-                        fs::remove(fullPath);
-                    else
+                    {
+                        try {
+                            fs::remove(fullPath);
+                        } catch (const fs::filesystem_error& ex)
+                        {
+                            printf("Error removing bucket file %s.\n", ex.what());
+                        };
+                    } else
                         printf("Path %s does not exist \n", fullPath.string().c_str());
                     
                     
@@ -217,6 +224,26 @@ std::string getTimeString(int64_t timestamp, char *buffer, size_t nBuffer)
     return std::string(buffer); // Copies the null-terminated character sequence
 };
 
+std::string fsReadable(uint64_t nBytes)
+{
+    char buffer[128];
+    if (nBytes >= 1024ll*1024ll*1024ll*1024ll)
+        snprintf(buffer, sizeof(buffer), "%.2f TB", nBytes/1024.0/1024.0/1024.0/1024.0);
+    else
+    if (nBytes >= 1024*1024*1024)
+        snprintf(buffer, sizeof(buffer), "%.2f GB", nBytes/1024.0/1024.0/1024.0);
+    else
+    if (nBytes >= 1024*1024)
+        snprintf(buffer, sizeof(buffer), "%.2f MB", nBytes/1024.0/1024.0);
+    else
+    if (nBytes >= 1024)
+        snprintf(buffer, sizeof(buffer), "%.2f KB", nBytes/1024.0);
+    else
+        snprintf(buffer, sizeof(buffer), "%lu bytes", nBytes);
+    return std::string(buffer);
+};
+
+
 /** called from AppInit2() in init.cpp */
 bool SecureMsgStart(bool fScanChain)
 {
@@ -234,9 +261,9 @@ bool SecureMsgStart(bool fScanChain)
         SecureMsgScanBlockChain();
     };
     
-    printf("sizeof(long int) %d.\n", sizeof(long int));
-    printf("sizeof(int64_t) %d.\n", sizeof(int64_t));
-    printf("sizeof(size_t) %d.\n", sizeof(size_t));
+    //printf("sizeof(long int) %d.\n", sizeof(long int));
+    //printf("sizeof(int64_t) %d.\n", sizeof(int64_t));
+    //printf("sizeof(size_t) %d.\n", sizeof(size_t));
     
     
     int64_t now = GetTime();
@@ -723,14 +750,15 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
 
 bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
 {
-    //printf("SecureMsgSendData() %s.\n", pto->addrName.c_str());
     /*
         Called from ProcessMessage
         Runs in ThreadMessageHandler2
     */
     
-    int64_t now = time(NULL);
+    //printf("SecureMsgSendData() %s.\n", pto->addrName.c_str());
     
+    
+    int64_t now = time(NULL);
     
     if (pto->smsgData.lastSeen == 0)
     {
@@ -1146,8 +1174,6 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
             memcpy(&smsgInbox.vchMessage[SMSG_HDR_LEN], pPayload, nPayload);
             
             
-            NotifySecMsgInboxChanged(smsgInbox);
-            
             dbInbox.WriteSmesg(vchKey, smsgInbox);
             
             // -- must be a better way...
@@ -1157,14 +1183,33 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
             vchUnread.insert(vchUnread.end(), vchKey.begin(), vchKey.end()); // append
             
             dbInbox.WriteUnread(vchUnread);
+            
+            NotifySecMsgInboxChanged(smsgInbox);
         }
     };
     
     return 0;
 };
 
+int SecureMsgGetLocalKey(CKeyID& ckid, CPubKey& cpkOut)
+{
+    CKey key;
+    if (!pwalletMain->GetKey(ckid, key))
+        return 4;
+    
+    key.SetCompressedPubKey(); // make sure key is compressed
+    
+    cpkOut = key.GetPubKey();
+    if (!cpkOut.IsValid()
+        || !cpkOut.IsCompressed())
+    {
+        printf("Public key is invalid %s.\n", ValueString(cpkOut.Raw()).c_str());
+        return 1;
+    };
+    return 0;
+};
 
-int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
+int SecureMsgGetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
 {
     /* returns
         0 success,
@@ -1182,23 +1227,10 @@ int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
     if (!address.GetKeyID(keyID))
         return 3;
     
-    //CBitcoinAddress testAddr;
-    //testAddr.Set(keyID);
-    
-    CKey key;
-    if (!pwalletMain->GetKey(keyID, key))
-        return 4;
-    
-    key.SetCompressedPubKey(); // make sure key is compressed
-    
-    CPubKey pubKey = key.GetPubKey();
-    if (!pubKey.IsValid()
-        || !pubKey.IsCompressed())
-    {
-        printf("Public key is invalid %s.\n", ValueString(pubKey.Raw()).c_str());
-        return 1;
-    };
-    
+    int rv;
+    CPubKey pubKey;
+    if ((rv = SecureMsgGetLocalKey(keyID, pubKey)) != 0)
+        return rv;
     
     //printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
     strPublicKey = EncodeBase58(pubKey.Raw());
@@ -1208,7 +1240,7 @@ int GetLocalPublicKey(std::string& strAddress, std::string& strPublicKey)
     return 0;
 };
 
-int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut)
+int SecureMsgGetStoredKey(CKeyID& ckid, CPubKey& cpkOut)
 {
     /* returns
         0 success,
@@ -1216,7 +1248,7 @@ int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut)
         2 public key not in database
     */
     if (fDebugSmsg)
-        printf("GetStoredKey().\n");
+        printf("SecureMsgGetStoredKey().\n");
     
     CSmesgPubKeyDB addrpkdb("r");
     
@@ -1517,23 +1549,13 @@ int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket)
     return SecureMsgStore(&smsg.hash[0], smsg.pPayload, smsg.nPayload, fUpdateBucket);
 };
 
-int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message)
+int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string& addressTo, std::string& message)
 {
-    // -- create a secure message, and place it on the network
-    
-    /*
-        Using the same method as bitmessage.
-        If bitmessage is secure this should be too.
-        https://bitmessage.org/wiki/Encryption
-        
-        Some differences:
-        bitmessage seems to use curve sect283r1
-        Cinnicoin addresses use secp256k1
-        
+    /* Create a secure message
     */
     
     if (fDebugSmsg)
-        printf("SecureMsgSend(%s, %s, ...)\n", addressFrom.c_str(), addressTo.c_str());
+        printf("SecureMsgEncrypt(%s, %s, ...)\n", addressFrom.c_str(), addressTo.c_str());
     
     if (message.size() > 2048)
     {
@@ -1541,8 +1563,6 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
         return 1;
     };
     
-    
-    SecureMessage smsg;
     smsg.version = 1;
     smsg.timestamp = time(NULL);
     
@@ -1594,10 +1614,14 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     // -- public key K is the destination address
     CPubKey cpkDestK;
-    if (GetStoredKey(ckidDest, cpkDestK) != 0)
+    if (SecureMsgGetStoredKey(ckidDest, cpkDestK) != 0)
     {
-        printf("Could not get public key for destination address.\n");
-        return 1;
+        // -- maybe it's a local key (outbox?)
+        if (SecureMsgGetLocalKey(ckidDest, cpkDestK) != 0)
+        {
+            printf("Could not get public key for destination address.\n");
+            return 1;
+        };
     };
     
     
@@ -1788,8 +1812,42 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     // todo hash checksum
     
-    // todo save random key, to allow outgoing messages to be read.
-    //   or create a copy 'sent' to an owned address that isn't broadcast
+    return 0;
+}
+
+int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message)
+{
+    /* Encrypt secure message, and place it on the network
+        Make a copy of the message to sender's first address and place in outbox
+    
+        Using the same method as bitmessage.
+        If bitmessage is secure this should be too.
+        https://bitmessage.org/wiki/Encryption
+        
+        Some differences:
+        bitmessage seems to use curve sect283r1
+        Cinnicoin addresses use secp256k1
+        
+    */
+    
+    if (fDebugSmsg)
+        printf("SecureMsgSend(%s, %s, ...)\n", addressFrom.c_str(), addressTo.c_str());
+    
+    if (message.size() > 2048)
+    {
+        printf("Message is too long, %lu.\n", message.size());
+        return 1;
+    };
+    
+    
+    int rv;
+    SecureMessage smsg;
+    
+    if ((rv = SecureMsgEncrypt(smsg, addressFrom, addressTo, message)) != 0)
+    {
+        printf("SecureMsgSend(), encrypt for recipient failed.\n");
+        return rv;
+    };
     
     // -- add to message store
     {
@@ -1802,6 +1860,68 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     {
         // message recipient is not this node (or failed)
     };
+    
+    
+    
+    
+    
+    //  -- for outbox create a copy encrypted for owned address
+    //     if the wallet is encrypted private key needed to decrypt will be unavailable
+    
+    
+    std::string addressOutbox;
+    CBitcoinAddress coinAddrOutbox;
+    
+    BOOST_FOREACH(const PAIRTYPE(CBitcoinAddress, std::string)& item, pwalletMain->mapAddressBook)
+    {
+        const CBitcoinAddress& address = item.first;
+        //const std::string& strName = item.second;
+        
+        addressOutbox = address.ToString();
+        if (!coinAddrOutbox.SetString(addressOutbox)) // test valid
+        {
+            continue;
+        };
+        //if (strName == "" || strName == "0") // just get first valid address (what happens if user renames account)
+        break;
+    };
+    
+    
+    SecureMessage smsgForOutbox;
+    if ((rv = SecureMsgEncrypt(smsgForOutbox, addressFrom, addressOutbox, message)) != 0)
+    {
+        printf("SecureMsgSend(), encrypt for outbox failed, %d.\n", rv);
+    } else
+    { // save to outbox db
+        {
+            LOCK(cs_smsgOutbox);
+            
+            CSmesgOutboxDB dbOutbox("cw");
+            
+            std::vector<unsigned char> vchKey;
+            vchKey.resize(16); // timestamp8 + sample8
+            memcpy(&vchKey[0], &smsgForOutbox.hash[0] + 5, 8);   // timestamp
+            memcpy(&vchKey[8], &smsgForOutbox.pPayload, 8);  // sample
+            
+            SecOutboxMsg smsgOutbox;
+            
+            smsgOutbox.timeReceived  = GetTime();
+            smsgOutbox.sAddrTo       = addressTo;
+            smsgOutbox.sAddrOutbox   = addressOutbox;
+            
+            smsgOutbox.vchMessage.resize(SMSG_HDR_LEN + smsgForOutbox.nPayload);
+            memcpy(&smsgOutbox.vchMessage[0], &smsgForOutbox.hash[0], SMSG_HDR_LEN);
+            memcpy(&smsgOutbox.vchMessage[SMSG_HDR_LEN], smsgForOutbox.pPayload, smsgForOutbox.nPayload);
+            
+            
+            dbOutbox.WriteSmesg(vchKey, smsgOutbox);
+            
+            NotifySecMsgOutboxChanged(smsgOutbox);
+        }
+    }
+    
+    //addressTo
+    
     
     if (fDebugSmsg)
         printf("Secure message sent to %s.\n", addressTo.c_str());
