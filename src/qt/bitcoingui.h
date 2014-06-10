@@ -81,7 +81,7 @@ private:
     QWidget *transactionsPage;
     AddressBookPage *addressBookPage;
     AddressBookPage *receiveCoinsPage;
-    AddressBookPage *messagePage;
+    MessagePage *messagePage;
     AddressBookPage *invoicePage;
     AddressBookPage *receiptPage;
     SendCoinsDialog *sendCoinsPage;

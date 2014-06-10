@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
 
                 ClientModel clientModel(&optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
-                MessageModel messageModel(pwalletMain);
+                MessageModel messageModel(pwalletMain, &walletModel);
                 IRCModel ircModel(&optionsModel);
 
                 window.setClientModel(&clientModel);

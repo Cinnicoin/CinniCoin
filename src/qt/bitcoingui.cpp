@@ -7,6 +7,7 @@
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
+#include "messagepage.h"
 #include "sendcoinsdialog.h"
 #include "sendmessagesdialog.h"
 #include "signverifymessagedialog.h"
@@ -111,7 +112,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     receiveCoinsPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
-    //messagePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    messagePage = new MessagePage(this);
     //invoicePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
     //receiptPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
@@ -130,7 +131,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     centralWidget->addWidget(sendCoinsPage);
     centralWidget->addWidget(sendMessagesPage);
     centralWidget->addWidget(sendMessagesAnonPage);
-    //centralWidget->addWidget(messagePage);
+    centralWidget->addWidget(messagePage);
     //centralWidget->addWidget(invoicePage);
     //centralWidget->addWidget(receiptPage);
     //centralWidget->addWidget(messageAnonPage);
@@ -505,7 +506,7 @@ void BitcoinGUI::setMessageModel(MessageModel *messageModel)
         // Report errors from wallet thread
         connect(messageModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
 
-        //messagePage->setModel(messageModel);
+        messagePage->setModel(messageModel);
         sendMessagesPage->setModel(messageModel);
         sendMessagesAnonPage->setModel(messageModel);
         /*

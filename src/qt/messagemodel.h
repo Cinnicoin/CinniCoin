@@ -1,12 +1,15 @@
 #ifndef MESSAGEMODEL_H
 #define MESSAGEMODEL_H
 
-#include <QObject>
 #include <vector>
 #include "allocators.h" /* for SecureString */
 #include <map>
+#include <QAbstractTableModel>
+#include <QStringList>
 
-class CMessage;
+
+class MessageTablePriv;
+class SecInboxMsg;
 class CWallet;
 class WalletModel;
 
@@ -24,12 +27,12 @@ public:
 };
 
 /** Interface to Cinnicoin Secure Messaging from Qt view code. */
-class MessageModel : public QObject
+class MessageModel : public QAbstractTableModel
 {
     Q_OBJECT
 
 public:
-    explicit MessageModel(CWallet *wallet, QObject *parent = 0);
+    explicit MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *parent = 0);
     ~MessageModel();
 
     enum StatusCode // Returned by sendMessages
@@ -42,6 +45,40 @@ public:
         MessageCommitFailed,
         Aborted
     };
+
+    enum ColumnIndex {
+        Type = 0,   /**< Sent/Received */
+        SentDateTime = 1, /**< Time Sent */
+        ReceivedDateTime = 2, /**< Time Received */
+        Label = 3,   /**< User specified label */
+        ToAddress = 4, /**< To Bitcoin address */
+        FromAddress = 5, /**< From Bitcoin address */
+        Message = 6, /**< From Bitcoin address */
+    };
+
+    enum RoleIndex {
+        TypeRole = Qt::UserRole /**< Type of message (#Sent or #Received) */
+    };
+
+    static const QString Sent; /**< Specifies sent message */
+    static const QString Received; /**< Specifies sent message */
+
+    /** @name Methods overridden from QAbstractTableModel
+        @{*/
+    int rowCount(const QModelIndex &parent) const;
+    int columnCount(const QModelIndex &parent) const;
+    QVariant data(const QModelIndex &index, int role) const;
+    //bool setData(const QModelIndex & index, const QVariant & value, int role);
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+    QModelIndex index(int row, int column, const QModelIndex & parent) const;
+    //bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
+    Qt::ItemFlags flags(const QModelIndex & index) const;
+    /*@}*/
+
+    /* Look up row index of a message in the model.
+       Return -1 if not found.
+     */
+    int lookupMessage(const QString &message) const;
 
     WalletModel *getWalletModel();
 
@@ -66,15 +103,17 @@ public:
 
 private:
     CWallet *wallet;
-    QTimer *pollTimer;
-
     WalletModel *walletModel;
-
+    QTimer *pollTimer;
+    MessageTablePriv *priv;
+    QStringList columns;
 
 public slots:
 
     /* Check for new messages */
     void pollMessages();
+
+    friend class MessageTablePriv;
 
 signals:
     // Asynchronous error notification
