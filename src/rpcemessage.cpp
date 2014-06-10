@@ -381,7 +381,7 @@ Value smsginbox(const Array& params, bool fHelp)
                 {
                     if (datKey.get_size() > datKey.get_ulen())
                     {
-                        printf("Resizing vchKeyData %d\n", datKey.get_size());
+                        //printf("Resizing vchKeyData %d\n", datKey.get_size());
                         vchKeyData.resize(datKey.get_size());
                         datKey.set_ulen(vchKeyData.size());
                         datKey.set_data(&vchKeyData[0]);
@@ -389,7 +389,7 @@ Value smsginbox(const Array& params, bool fHelp)
                     
                     if (datValue.get_size() > datValue.get_ulen())
                     {
-                        printf("Resizing vchValueData %d\n", datValue.get_size());
+                        //printf("Resizing vchValueData %d\n", datValue.get_size());
                         vchValueData.resize(datValue.get_size());
                         datValue.set_ulen(vchValueData.size());
                         datValue.set_data(&vchValueData[0]);

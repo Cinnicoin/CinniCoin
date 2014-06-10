@@ -205,7 +205,7 @@ bool SecureMsgScanBlock(CBlock& block);
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart);
 bool SecureMsgScanBlockChain();
 
-int SecureMsgScanMessages();
+int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
 
 int GetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
 

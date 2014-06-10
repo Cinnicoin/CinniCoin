@@ -1003,7 +1003,7 @@ bool SecureMsgScanBlock(CBlock& block)
     }
     
     if (fDebugSmsg)
-        printf("Found %u transactions, %u inputs, %u new public keys, %u duplicates.", nTransactions, nInputs, nPubkeys, nDuplicates);
+        printf("Found %u transactions, %u inputs, %u new public keys, %u duplicates.\n", nTransactions, nInputs, nPubkeys, nDuplicates);
     return true;
 };
 
@@ -1084,10 +1084,81 @@ bool SecureMsgScanBlockChain()
     return true;
 };
 
-int SecureMsgScanMessages()
+int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload)
 {
+    /* 
+    Check if message belongs to this node
+    returns
+        0 success,
+        1 error
+        2 no match
+        
+    */
     
+    if (fDebugSmsg)
+        printf("SecureMsgScanMessage()\n");
     
+    std::string addressTo;
+    MessageData msg; // placeholder
+    bool fOwnMessage = false;
+    
+    // TODO: whitelist of addresses to receive on
+    BOOST_FOREACH(const PAIRTYPE(CTxDestination, std::string)& entry, pwalletMain->mapAddressBook)
+    {
+        if (!IsMine(*pwalletMain, entry.first))
+            continue;
+        
+        //printf("entry.first %s.\n", entry.first.ToString.c_str());
+        CBitcoinAddress coinAddress(entry.first);
+        addressTo = coinAddress.ToString();
+        //printf("coinAddress: %s.\n", coinAddress.ToString().c_str());
+        //printf("addressTo: %s.\n", addressTo.c_str());
+        
+        if (SecureMsgDecrypt(true, addressTo, pHeader, pPayload, nPayload, msg) == 0)
+        {
+            if (fDebugSmsg)
+                printf("Decrypted message with %s.\n", addressTo.c_str());
+            fOwnMessage = true;
+            break;
+        };
+    };
+    
+    if (fOwnMessage)
+    { // save to inbox
+        {
+            LOCK(cs_smsgInbox);
+            
+            CSmesgInboxDB dbInbox("cw");
+            
+            std::vector<unsigned char> vchKey;
+            vchKey.resize(16); // timestamp8 + sample8
+            memcpy(&vchKey[0], pHeader + 5, 8); // timestamp
+            memcpy(&vchKey[8], pPayload, 8);    // sample
+            
+            SecInboxMsg smsgInbox;
+            smsgInbox.timeReceived  = GetTime();
+            smsgInbox.sAddrTo       = addressTo;
+            //smsgInbox.vchMessage    = vchData;
+            //smsgInbox.vchMessage    = std::vector<unsigned char>(vchData.begin() + n, vchData.begin() + n + SMSG_HDR_LEN + psmsg->nPayload);
+            // -- data may not be contiguous
+            smsgInbox.vchMessage.resize(SMSG_HDR_LEN + nPayload);
+            memcpy(&smsgInbox.vchMessage[0], pHeader, SMSG_HDR_LEN);
+            memcpy(&smsgInbox.vchMessage[SMSG_HDR_LEN], pPayload, nPayload);
+            
+            
+            NotifySecMsgInboxChanged(smsgInbox);
+            
+            dbInbox.WriteSmesg(vchKey, smsgInbox);
+            
+            // -- must be a better way...
+            std::vector<unsigned char> vchUnread;
+            dbInbox.ReadUnread(vchUnread);
+            
+            vchUnread.insert(vchUnread.end(), vchKey.begin(), vchKey.end()); // append
+            
+            dbInbox.WriteUnread(vchUnread);
+        }
+    };
     
     return 0;
 };
@@ -1209,7 +1280,7 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
     
     //CKeyID ckidT = pubKeyT.GetID();
     CBitcoinAddress addressT(address);
-    printf("addressT %s.\n", addressT.ToString().c_str());
+    //printf("addressT %s.\n", addressT.ToString().c_str());
     
     if (addressT.ToString().compare(address) != 0)
     {
@@ -1329,67 +1400,10 @@ int SecureMsgReceive(std::vector<unsigned char>& vchData)
             break; // continue?
         };
         
-        if (fDebugSmsg)
-            printf("Testing if message is for this node.\n");
         
-        std::string addressTo;
-        
-        MessageData msg; // placeholder
-        bool fOwnMessage = false;
-        // TODO: move this elsewhere, ScanSecureMessage/s()
-        BOOST_FOREACH(const PAIRTYPE(CTxDestination, std::string)& entry, pwalletMain->mapAddressBook)
+        if (SecureMsgScanMessage(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload) != 0)
         {
-            if (!IsMine(*pwalletMain, entry.first))
-                continue;
-            
-            //printf("entry.first %s.\n", entry.first.ToString.c_str());
-            CBitcoinAddress coinAddress(entry.first);
-            //printf("coinAddress: %s.\n", coinAddress.ToString().c_str());
-            addressTo = coinAddress.ToString();
-            //printf("addressTo: %s.\n", addressTo.c_str());
-            
-            if (SecureMsgDecrypt(true, addressTo, &vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload, msg) == 0)
-            {
-                if (fDebugSmsg)
-                    printf("Decrypted message with %s.\n", addressTo.c_str());
-                fOwnMessage = true;
-                break;
-            };
-        };
-        
-        if (fOwnMessage)
-        { // save to inbox
-            {
-                LOCK(cs_smsgInbox);
-                
-                // TODO: need to store time received
-                //  How to update?
-                
-                CSmesgInboxDB dbInbox("cw");
-                
-                std::vector<unsigned char> vchKey;
-                vchKey.resize(16); // time + sample
-                memcpy(&vchKey[0], &vchData[n + 5], 8); // timestamp
-                memcpy(&vchKey[8], &vchData[n + SMSG_HDR_LEN], 8); // sample
-                
-                SecInboxMsg smsgInbox;
-                smsgInbox.timeReceived  = GetTime();
-                smsgInbox.sAddrTo       = addressTo;
-                //smsgInbox.vchMessage    = vchData;
-                smsgInbox.vchMessage    = std::vector<unsigned char>(vchData.begin() + n, vchData.begin() + n + SMSG_HDR_LEN + psmsg->nPayload);
-                
-                NotifySecMsgInboxChanged(smsgInbox);
-                
-                dbInbox.WriteSmesg(vchKey, smsgInbox);
-                
-                // must be a better way...
-                std::vector<unsigned char> vchUnread;
-                dbInbox.ReadUnread(vchUnread);
-                
-                vchUnread.insert(vchUnread.end(), vchKey.begin(), vchKey.end()); // append
-                
-                dbInbox.WriteUnread(vchUnread);
-            }
+            // message recipient is not this node (or failed)
         };
         
         n += SMSG_HDR_LEN + psmsg->nPayload;
@@ -1528,12 +1542,12 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     };
     
     
-    SecureMessage secMesg;
-    secMesg.version = 1;
-    secMesg.timestamp = time(NULL);
+    SecureMessage smsg;
+    smsg.version = 1;
+    smsg.timestamp = time(NULL);
     
-    memset(secMesg.destHash, 0, 20); // Not used yet
-    memset(secMesg.hash, 0, 4); // Not used yet (checksum)
+    memset(smsg.destHash, 0, 20); // Not used yet
+    memset(smsg.hash, 0, 4); // Not used yet (checksum)
     
     bool fSendAnonymous;
     CBitcoinAddress coinAddrFrom;
@@ -1591,7 +1605,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     RandAddSeedPerfmon();
     
-    RAND_bytes(&secMesg.iv[0], 16);
+    RAND_bytes(&smsg.iv[0], 16);
     
     
     // -- Generate a new random EC key pair with private key called r and public key called R.
@@ -1642,7 +1656,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     };
     //printf("cpkR.Raw().size() %d.\n", cpkR.Raw().size());
     //printf("compressed cpkR %s.\n", ValueString(cpkR.Raw()).c_str());
-    memcpy(secMesg.cpkR, &cpkR.Raw()[0], 33);
+    memcpy(smsg.cpkR, &cpkR.Raw()[0], 33);
     
     
     // -- Use public key P and calculate the SHA512 hash H. 
@@ -1668,20 +1682,21 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     uint32_t lenMsgData;
     
     uint32_t lenMsg = message.size();
-    printf("lenMsg: %d.\n", lenMsg);
+    //printf("lenMsg: %d.\n", lenMsg);
     if (lenMsg > 128)
     {
-        // only compress if over 128 bytes
+        // -- only compress if over 128 bytes
         int worstCase = LZ4_compressBound(message.size());
-        printf("worstCase: %d.\n", worstCase);
+        //printf("worstCase: %d.\n", worstCase);
         vchCompressed.resize(worstCase);
         int lenComp = LZ4_compress((char*)message.c_str(), (char*)&vchCompressed[0], lenMsg);
-        printf("lenComp: %d.\n", lenComp);
+        //printf("lenComp: %d.\n", lenComp);
         if (lenComp < 1)
         {
             printf("Could not compress message data.\n");
             return 1;
         };
+        
         pMsgData = &vchCompressed[0];
         lenMsgData = lenComp;
         
@@ -1689,8 +1704,6 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     {
         pMsgData = (unsigned char*)message.c_str();
         lenMsgData = lenMsg;
-        //vchPayload.resize(SMSG_PL_HDR_LEN + lenMsg);
-        //memcpy(&vchPayload[SMSG_PL_HDR_LEN], message.c_str(), lenMsg);
     };
     
     if (fSendAnonymous)
@@ -1729,23 +1742,24 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     
     SMsgCrypter crypter;
-    crypter.SetKey(key_e, secMesg.iv);
+    crypter.SetKey(key_e, smsg.iv);
     std::vector<unsigned char> vchCiphertext;
     
     if (!crypter.Encrypt(&vchPayload[0], vchPayload.size(), vchCiphertext))
         printf("crypter.Encrypt failed.\n");
     
+    
     try {
-        secMesg.pPayload = new unsigned char[vchCiphertext.size()];
+        smsg.pPayload = new unsigned char[vchCiphertext.size()];
     } catch (std::exception& e)
     {
         printf("Could not allocate pPayload, exception: %s.\n", e.what());
         return 1;
     };
     
-    memcpy(secMesg.pPayload, &vchCiphertext[0], vchCiphertext.size());
+    memcpy(smsg.pPayload, &vchCiphertext[0], vchCiphertext.size());
     
-    secMesg.nPayload = vchCiphertext.size();
+    smsg.nPayload = vchCiphertext.size();
     
     
     // Calculate a 32 byte MAC with HMACSHA256, using key_m as salt
@@ -1757,10 +1771,10 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     HMAC_CTX_init(&ctx);
     
     if (!HMAC_Init_ex(&ctx, &key_m[0], 32, EVP_sha256(), NULL)
-        || !HMAC_Update(&ctx, (unsigned char*) &secMesg.timestamp, sizeof(secMesg.timestamp))
-        || !HMAC_Update(&ctx, (unsigned char*) &secMesg.destHash[0], sizeof(secMesg.destHash))
+        || !HMAC_Update(&ctx, (unsigned char*) &smsg.timestamp, sizeof(smsg.timestamp))
+        || !HMAC_Update(&ctx, (unsigned char*) &smsg.destHash[0], sizeof(smsg.destHash))
         || !HMAC_Update(&ctx, &vchCiphertext[0], vchCiphertext.size())
-        || !HMAC_Final(&ctx, secMesg.mac, &nBytes)
+        || !HMAC_Final(&ctx, smsg.mac, &nBytes)
         || nBytes != 32)
         fHmacOk = false;
     
@@ -1778,17 +1792,19 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     //   or create a copy 'sent' to an owned address that isn't broadcast
     
     // -- add to message store
-    
     {
         LOCK(cs_smsg);
-        SecureMsgStore(secMesg, true);
+        SecureMsgStore(smsg, true);
     }
+    
+    // -- test if message was sent to self
+    if (SecureMsgScanMessage(&smsg.hash[0], smsg.pPayload, smsg.nPayload) != 0)
+    {
+        // message recipient is not this node (or failed)
+    };
     
     if (fDebugSmsg)
         printf("Secure message sent to %s.\n", addressTo.c_str());
-    
-    //MessageData msg;
-    //SecureMsgDecrypt(addressTo, secMesg, msg);
     
     return 0;
 };
