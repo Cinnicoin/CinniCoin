@@ -184,6 +184,31 @@ public:
         }
     }
 
+    void updateEntry(SecInboxMsg & smsgInbox)
+    {
+        MessageData msg;
+        const QString label = "";
+
+        uint32_t nPayload = smsgInbox.vchMessage.size() - SMSG_HDR_LEN;
+        if (SecureMsgDecrypt(false, smsgInbox.sAddrTo, &smsgInbox.vchMessage[0], &smsgInbox.vchMessage[SMSG_HDR_LEN], nPayload, msg) == 0)
+        {
+            QDateTime sent_datetime;
+            QDateTime received_datetime;
+
+            sent_datetime    .setTime_t(msg.timestamp);
+            received_datetime.setTime_t(smsgInbox.timeReceived);
+
+            cachedMessageTable.append(
+                MessageTableEntry(MessageTableEntry::Received,
+                                  label,
+                                  QString::fromStdString(smsgInbox.sAddrTo),
+                                  QString::fromStdString(msg.sFromAddress),
+                                  sent_datetime,
+                                  received_datetime,
+                                  QString((char*)&msg.vchMessage[0])));
+        }
+    }
+
     int size()
     {
         return cachedMessageTable.size();
@@ -207,7 +232,7 @@ MessageModel::MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *p
     QAbstractTableModel(parent), wallet(wallet), walletModel(walletModel), priv(0)
 {
 
-    columns << tr("Type") << tr("Label") << tr("To Address") << tr("From Address") << tr("Sent Date Time") << tr("Recieved Date Time") << tr("Message");
+    columns << tr("Type") << tr("Sent Date Time") << tr("Recieved Date Time") << tr("Label") << tr("To Address") << tr("From Address") << tr("Message");
     priv = new MessageTablePriv(wallet, this);
     priv->refreshMessageTable();
 
@@ -216,13 +241,13 @@ MessageModel::MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *p
     connect(pollTimer, SIGNAL(timeout()), this, SLOT(pollMessages()));
     pollTimer->start(MODEL_UPDATE_DELAY);
 
-    //subscribeToCoreSignals();
+    subscribeToCoreSignals();
 }
 
 MessageModel::~MessageModel()
 {
     delete priv;
-    //unsubscribeFromCoreSignals();
+    unsubscribeFromCoreSignals();
 }
 
 int MessageModel::getNumReceivedMessages() const
@@ -452,13 +477,31 @@ QModelIndex MessageModel::index(int row, int column, const QModelIndex & parent)
     }
 }
 
-/*
-void MessageModel::updateEntry(const QString &address, const QString &label, bool isMine, int status)
+void MessageModel::updateEntry(SecInboxMsg & smsgInbox)
 {
     // Update address book model from Bitcoin core
-    priv->updateEntry(address, label, isMine, status);
+    priv->updateEntry(smsgInbox);
 }
-*/
+
+static void NotifySecMsgInbox(MessageModel *messageModel, SecInboxMsg &inboxHdr)
+{
+    // Too noisy: OutputDebugStringF("NotifySecMsgInboxChanged %s\n", message);
+    QMetaObject::invokeMethod(messageModel, "updateEntry", Qt::QueuedConnection,
+                              Q_ARG(SecInboxMsg, inboxHdr));
+}
+
+void MessageModel::subscribeToCoreSignals()
+{
+    // Connect signals to irc
+    NotifySecMsgInboxChanged.connect(boost::bind(NotifySecMsgInbox, this, _1));
+}
+
+void MessageModel::unsubscribeFromCoreSignals()
+{
+    // Disconnect signals from irc
+    NotifySecMsgInboxChanged.disconnect(boost::bind(NotifySecMsgInbox, this, _1));
+}
+
 /*
 QString AddressTableModel::addRow(const QString &type, const QString &label, const QString &address)
 {

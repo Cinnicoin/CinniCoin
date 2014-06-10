@@ -108,10 +108,14 @@ private:
     MessageTablePriv *priv;
     QStringList columns;
 
+    void subscribeToCoreSignals();
+    void unsubscribeFromCoreSignals();
+
 public slots:
 
     /* Check for new messages */
     void pollMessages();
+    void updateEntry(SecInboxMsg & smsgInbox);
 
     friend class MessageTablePriv;
 
