@@ -13,12 +13,14 @@
 #include <QTextDocument>
 #include <QScrollBar>
 #include <QClipboard>
+#include <QDataWidgetMapper>
 
-SendMessagesDialog::SendMessagesDialog(Mode mode, QWidget *parent) :
+SendMessagesDialog::SendMessagesDialog(Mode mode, Type type, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::SendMessagesDialog),
     model(0),
-    mode(mode)
+    mode(mode),
+    type(type)
 {
 
     ui->setupUi(this);
@@ -38,11 +40,15 @@ SendMessagesDialog::SendMessagesDialog(Mode mode, QWidget *parent) :
 
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
+    connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
 
     fNewRecipientAllowed = true;
 
     if(mode == SendMessagesDialog::Anonymous)
         ui->frameAddressFrom->hide();
+
+    if(type == SendMessagesDialog::Page)
+        ui->closeButton->hide();
 }
 
 void SendMessagesDialog::setModel(MessageModel *model)
@@ -55,6 +61,22 @@ void SendMessagesDialog::setModel(MessageModel *model)
 
         if(entry)
             entry->setModel(model);
+    }
+}
+
+void SendMessagesDialog::loadRow(int row)
+{
+    if(model->data(model->index(row, model->Type, QModelIndex()), Qt::DisplayRole).toString() == MessageModel::Received)
+        ui->addressFrom->setText(model->data(model->index(row, model->ToAddress, QModelIndex()), Qt::DisplayRole).toString());
+    else
+        ui->addressFrom->setText(model->data(model->index(row, model->FromAddress, QModelIndex()), Qt::DisplayRole).toString());
+
+    for(int i = 0; i < ui->entries->count(); ++i)
+    {
+        SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
+
+        if(entry)
+            entry->loadRow(row);
     }
 }
 
@@ -214,6 +236,10 @@ void SendMessagesDialog::reject()
 void SendMessagesDialog::accept()
 {
     clear();
+
+    if(type == SendMessagesDialog::Dialog)
+        QDialog::done(0);
+
 }
 
 SendMessagesEntry *SendMessagesDialog::addEntry()

@@ -118,8 +118,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     sendCoinsPage = new SendCoinsDialog(this);
 
-    sendMessagesPage     = new SendMessagesDialog(SendMessagesDialog::Encrypted, this);
-    sendMessagesAnonPage = new SendMessagesDialog(SendMessagesDialog::Anonymous, this);
+    sendMessagesPage     = new SendMessagesDialog(SendMessagesDialog::Encrypted, SendMessagesDialog::Page, this);
+    sendMessagesAnonPage = new SendMessagesDialog(SendMessagesDialog::Anonymous, SendMessagesDialog::Page, this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
 

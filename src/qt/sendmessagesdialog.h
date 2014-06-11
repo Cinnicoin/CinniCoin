@@ -25,13 +25,19 @@ public:
 
     enum Mode {
         Encrypted,
-        Anonymous
+        Anonymous,
     };
 
-    explicit SendMessagesDialog(Mode mode, QWidget *parent = 0);
+    enum Type {
+        Page,
+        Dialog,
+    };
+
+    explicit SendMessagesDialog(Mode mode, Type type, QWidget *parent = 0);
     ~SendMessagesDialog();
 
     void setModel (MessageModel *model);
+    void loadRow(int row);
     bool checkMode(Mode mode);
     bool validate ();
 
@@ -53,6 +59,7 @@ private:
     MessageModel *model;
     bool fNewRecipientAllowed;
     Mode mode;
+    Type type;
 
 private slots:
     void on_sendButton_clicked();

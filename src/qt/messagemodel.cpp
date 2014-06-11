@@ -100,7 +100,7 @@ public:
                 if (SecureMsgDecrypt(false, smsgInbox.sAddrTo, &smsgInbox.vchMessage[0], &smsgInbox.vchMessage[SMSG_HDR_LEN], nPayload, msg) == 0)
                 {
 
-                    label = parent->getWalletModel()->getAddressTableModel()->labelForAddress(QString::fromStdString(smsgInbox.sAddrTo));
+                    label = parent->getWalletModel()->getAddressTableModel()->labelForAddress(QString::fromStdString(msg.sFromAddress));
 
                     sent_datetime    .setTime_t(msg.timestamp);
                     received_datetime.setTime_t(smsgInbox.timeReceived);
@@ -181,7 +181,7 @@ public:
         uint32_t nPayload = smsgInbox.vchMessage.size() - SMSG_HDR_LEN;
         if (SecureMsgDecrypt(false, smsgInbox.sAddrTo, &smsgInbox.vchMessage[0], &smsgInbox.vchMessage[SMSG_HDR_LEN], nPayload, msg) == 0)
         {
-            label = parent->getWalletModel()->getAddressTableModel()->labelForAddress(QString::fromStdString(smsgInbox.sAddrTo));
+            label = parent->getWalletModel()->getAddressTableModel()->labelForAddress(QString::fromStdString(msg.sFromAddress));
             sent_datetime    .setTime_t(msg.timestamp);
             received_datetime.setTime_t(smsgInbox.timeReceived);
 
@@ -240,7 +240,6 @@ public:
             memcpy(&vchKey[8], pPayload, 8);     // sample
             
             parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
-            
             
             cachedMessageTable.insert(lowerIndex, MessageTableEntry(vchKey,
                                       MessageTableEntry::Sent,

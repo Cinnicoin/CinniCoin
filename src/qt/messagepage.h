@@ -42,9 +42,15 @@ private:
     QString returnValue;
     QSortFilterProxyModel *proxyModel;
     QMenu *contextMenu;
+    QAction *replyAction;
+    QAction *copyFromAddressAction;
+    QAction *copyToAddressAction;
     QAction *deleteAction;
 
 private slots:
+    void on_replyButton_clicked();
+    void on_copyFromAddressButton_clicked();
+    void on_copyToAddressButton_clicked();
     void on_deleteButton_clicked();
     void selectionChanged();
     /** Spawn contextual menu (right mouse menu) for address book entry */

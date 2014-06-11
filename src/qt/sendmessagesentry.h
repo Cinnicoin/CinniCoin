@@ -19,6 +19,7 @@ public:
     ~SendMessagesEntry();
 
     void setModel(MessageModel *model);
+    void loadRow(int row);
     bool validate();
     SendMessagesRecipient getValue();
 

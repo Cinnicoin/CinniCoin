@@ -98,7 +98,15 @@ void SendMessagesEntry::setModel(MessageModel *model)
 
     this->model = model;
 
-    clear();
+    //clear();
+}
+
+void SendMessagesEntry::loadRow(int row)
+{
+    if(model->data(model->index(row, model->Type, QModelIndex()), Qt::DisplayRole).toString() == MessageModel::Received)
+        ui->sendTo->setText(model->data(model->index(row, model->FromAddress, QModelIndex()), Qt::DisplayRole).toString());
+    else
+        ui->sendTo->setText(model->data(model->index(row, model->ToAddress, QModelIndex()), Qt::DisplayRole).toString());
 }
 
 void SendMessagesEntry::setRemoveEnabled(bool enabled)

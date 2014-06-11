@@ -1,10 +1,9 @@
 #include "messagepage.h"
 #include "ui_messagepage.h"
 
+#include "sendmessagesdialog.h"
 #include "messagemodel.h"
-//#include "optionsmodel.h"
 #include "bitcoingui.h"
-//#include "editaddressdialog.h"
 #include "csvmodelwriter.h"
 #include "guiutil.h"
 
@@ -34,12 +33,23 @@ MessagePage::MessagePage(QWidget *parent) :
 #endif
 
     // Context menu actions
-    deleteAction = new QAction(ui->deleteButton->text(), this);
+    replyAction           = new QAction(ui->replyButton->text(),           this);
+    copyFromAddressAction = new QAction(ui->copyFromAddressButton->text(), this);
+    copyToAddressAction   = new QAction(ui->copyToAddressButton->text(),   this);
+    deleteAction          = new QAction(ui->deleteButton->text(),          this);
 
     // Build context menu
     contextMenu = new QMenu();
+
+    contextMenu->addAction(replyAction);
+    contextMenu->addAction(copyFromAddressAction);
+    contextMenu->addAction(copyToAddressAction);
     contextMenu->addAction(deleteAction);
-    connect(deleteAction, SIGNAL(triggered()), this, SLOT(on_deleteButton_clicked()));
+
+    connect(replyAction,           SIGNAL(triggered()), this, SLOT(on_replyButton_clicked()));
+    connect(copyFromAddressAction, SIGNAL(triggered()), this, SLOT(on_copyFromAddressButton_clicked()));
+    connect(copyToAddressAction,   SIGNAL(triggered()), this, SLOT(on_copyToAddressButton_clicked()));
+    connect(deleteAction,          SIGNAL(triggered()), this, SLOT(on_deleteButton_clicked()));
 
     connect(ui->tableView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
 }
@@ -62,7 +72,7 @@ void MessagePage::setModel(MessageModel *model)
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
 
     ui->tableView->setModel(proxyModel);
-    ui->tableView->sortByColumn(2, Qt::AscendingOrder);
+    ui->tableView->sortByColumn(2, Qt::DescendingOrder);
 
     // Set column widths
     ui->tableView->horizontalHeader()->resizeSection(MessageModel::Type,             100);
@@ -77,6 +87,38 @@ void MessagePage::setModel(MessageModel *model)
             this, SLOT(selectionChanged()));
 
     selectionChanged();
+}
+
+void MessagePage::on_replyButton_clicked()
+{
+    if(!model)
+        return;
+
+    if(!ui->tableView->selectionModel())
+        return;
+
+    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows();
+
+    if(indexes.isEmpty())
+        return;
+
+    SendMessagesDialog dlg(SendMessagesDialog::Encrypted, SendMessagesDialog::Dialog, this);
+
+    dlg.setModel(model);
+    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
+    dlg.loadRow(origIndex.row());
+    dlg.exec();
+
+}
+
+void MessagePage::on_copyFromAddressButton_clicked()
+{
+    GUIUtil::copyEntryData(ui->tableView, MessageModel::FromAddress, Qt::DisplayRole);
+}
+
+void MessagePage::on_copyToAddressButton_clicked()
+{
+    GUIUtil::copyEntryData(ui->tableView, MessageModel::ToAddress, Qt::DisplayRole);
 }
 
 void MessagePage::on_deleteButton_clicked()
@@ -100,25 +142,46 @@ void MessagePage::selectionChanged()
 
     if(table->selectionModel()->hasSelection())
     {
+        replyAction->setEnabled(true);
+        copyFromAddressAction->setEnabled(true);
+        copyToAddressAction->setEnabled(true);
         deleteAction->setEnabled(true);
+
+        ui->copyFromAddressButton->setEnabled(true);
+        ui->copyToAddressButton->setEnabled(true);
+        ui->replyButton->setEnabled(true);
         ui->deleteButton->setEnabled(true);
 
+        ui->messageDetails->show();
+
         // Figure out which message was selected, and return it
-        QModelIndexList indexes = table->selectionModel()->selectedRows(MessageModel::Message);
+        QModelIndexList messageColumn = table->selectionModel()->selectedRows(MessageModel::Message);
+        QModelIndexList labelColumn   = table->selectionModel()->selectedRows(MessageModel::Label);
+        QModelIndexList typeColumn    = table->selectionModel()->selectedRows(MessageModel::Type);
 
-        foreach (QModelIndex index, indexes)
+        foreach (QModelIndex index, messageColumn)
         {
-            QVariant message = table->model()->data(index);
+            ui->message->setPlainText(table->model()->data(index).toString());
+        }
 
-            ui->message->setPlainText(message.toString());
-            ui->message->show();
+        foreach (QModelIndex index, typeColumn)
+        {
+            ui->labelType->setText(table->model()->data(index).toString());
+        }
+
+        foreach (QModelIndex index, labelColumn)
+        {
+            ui->contactLabel->setText(table->model()->data(index).toString());
         }
     }
     else
     {
+        ui->replyButton->setEnabled(false);
+        ui->copyFromAddressButton->setEnabled(false);
+        ui->copyToAddressButton->setEnabled(false);
         ui->deleteButton->setEnabled(false);
+        ui->messageDetails->hide();
         ui->message->clear();
-        ui->message->hide();
     }
 }
 

@@ -2047,11 +2047,14 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     std::string addressOutbox;
     CBitcoinAddress coinAddrOutbox;
     
-    BOOST_FOREACH(const PAIRTYPE(CBitcoinAddress, std::string)& item, pwalletMain->mapAddressBook)
-    {
-        const CBitcoinAddress& address = item.first;
+    BOOST_FOREACH(const PAIRTYPE(CTxDestination, std::string)& entry, pwalletMain->mapAddressBook)
+        {
+        if (!IsMine(*pwalletMain, entry.first))
+            continue;
+
+        const CBitcoinAddress& address = entry.first;
         //const std::string& strName = item.second;
-        
+
         addressOutbox = address.ToString();
         if (!coinAddrOutbox.SetString(addressOutbox)) // test valid
         {
@@ -2060,7 +2063,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
         //if (strName == "" || strName == "0") // just get first valid address (what happens if user renames account)
         break;
     };
-    
+
     if (fDebugSmsg)
         printf("Encrypting a copy for outbox, using address %s\n", addressOutbox.c_str());
     
