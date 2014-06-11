@@ -11,12 +11,14 @@
 #include "wallet.h"
 #include "emessageclass.h"
 
-const unsigned int SMSG_BUCKET_LEN = 60 * 10; // in seconds
-const unsigned int SMSG_RETENTION  = 60 * 60 * 2; // in seconds
+const unsigned int SMSG_BUCKET_LEN = 60 * 10;           // in seconds
+const unsigned int SMSG_RETENTION  = 60 * 60 * 48;      // in seconds
 
 const unsigned int SMSG_TIME_LEEWAY = 30;
 
-const unsigned int SMSG_MAX_MSG_BYTES = 2048; // the user input part
+const unsigned int SMSG_MAX_MSG_BYTES = 2048;           // the user input part
+
+
 
 
 /** Inbox db changed.
@@ -57,9 +59,6 @@ public:
 };
 
 
-
-
-// Could use CCrypter, duplicated to experiment with
 class SMsgCrypter
 {
 private:
@@ -251,7 +250,6 @@ bool SecureMsgStart(bool fScanChain);
 bool SecureMsgStop();
 
 bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRecv);
-
 bool SecureMsgSendData(CNode* pto, bool fSendTrickle);
 
 
@@ -261,12 +259,10 @@ bool SecureMsgScanBlockChain();
 
 int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
 
-
 int SecureMsgGetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
-
 int SecureMsgGetLocalKey(CKeyID& ckid, CPubKey& cpkOut);
-
 int SecureMsgGetLocalPublicKey(std::string& strAddress, std::string& strPublicKey);
+
 int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
 int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData);
@@ -277,6 +273,8 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
 int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
 
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message, std::string& sError);
+
+int SecureMsgGetHash(uint32_t& hashOut, unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
 
 int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string& addressTo, std::string& message);
 

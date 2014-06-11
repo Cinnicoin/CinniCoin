@@ -4,15 +4,14 @@
 #ifndef CINNICOIN_EMESSAGE_CLASS_H
 #define CINNICOIN_EMESSAGE_CLASS_H
 
-// length of unencrypted header
-// 4 + 1 + 8 + 20 + 16 + 33 + 32 + 4
+// length of unencrypted header, 4 + 1 + 8 + 20 + 16 + 33 + 32 + 4
 const unsigned int SMSG_HDR_LEN = 118;
 
 // length of encrypted header in payload
 const unsigned int SMSG_PL_HDR_LEN = 1+20+65+4;
 
 
-#pragma pack(1)
+#pragma pack(push, 1)
 class SecureMessage
 {
 public:
@@ -24,18 +23,11 @@ public:
     
     ~SecureMessage()
     {
-        //printf("~SecureMessage()\n");
         if (pPayload)
             delete[] pPayload;
         pPayload = NULL;
     };
     
-    /*
-    IMPLEMENT_SERIALIZE
-    (
-        READWRITE(this->hash, 4);
-    )
-    */
     unsigned char   hash[4];
     unsigned char   version;
     int64_t         timestamp;
@@ -43,12 +35,12 @@ public:
     unsigned char   iv[16];
     unsigned char   cpkR[33];
     unsigned char   mac[32];
-    //std::vector<unsigned char> vchPayload;
     uint32_t        nPayload;
     unsigned char*  pPayload;
         
 };
-#pragma pack()
+#pragma pack(pop)
+
 
 class MessageData
 {
@@ -57,8 +49,9 @@ public:
     int64_t                     timestamp;
     std::string                 sToAddress;
     std::string                 sFromAddress;
-    std::vector<unsigned char>  vchMessage; // null terminated plaintext
+    std::vector<unsigned char>  vchMessage;         // null terminated plaintext
 };
+
 
 class SecMsgToken
 {
@@ -92,13 +85,14 @@ public:
     
 };
 
+
 class SecMsgBucket
 {
 public:
     SecMsgBucket()
     {
-        timeChanged = 0;
-        hash        = 0;
+        timeChanged     = 0;
+        hash            = 0;
     };
     ~SecMsgBucket() {};
     
@@ -113,7 +107,7 @@ public:
 
 class SecMsgNode
 {
-// Tacked onto CNode
+// -- Tacked onto CNode
 public:
     SecMsgNode()
     {
@@ -131,3 +125,4 @@ public:
 };
 
 #endif // CINNICOIN_EMESSAGE_CLASS_H
+

@@ -96,8 +96,6 @@ Value smsggetpubkey(const Array& params, bool fHelp)
             result.push_back(Pair("message", "Invalid address."));
             return result;
         case 4:
-            //result.push_back(Pair("result", "Failed."));
-            //result.push_back(Pair("message", "Address not found in wallet."));
             break; // check db
         //case 1:
         default:
@@ -171,7 +169,6 @@ Value smsglistlocalkeys(const Array& params, bool fHelp)
             continue;
         
         
-        //printf("entry.first %s.\n", entry.first.ToString.c_str());
         CBitcoinAddress coinAddress(entry.first);
         if (!coinAddress.IsValid())
             continue;
@@ -179,8 +176,6 @@ Value smsglistlocalkeys(const Array& params, bool fHelp)
         std::string address;
         std::string strPublicKey;
         address = coinAddress.ToString();
-        //result.push_back(Pair("result", Pair(address, "key.")));
-        
         
         CKeyID keyID;
         if (!coinAddress.GetKeyID(keyID))
@@ -199,12 +194,9 @@ Value smsglistlocalkeys(const Array& params, bool fHelp)
             continue;
         };
         
-        
-        //printf("public key %s.\n", ValueString(pubKey.Raw()).c_str());
         strPublicKey = EncodeBase58(pubKey.Raw());
         
         result.push_back(Pair("result", address + " - " + strPublicKey));
-        
     };
     
     return result;
@@ -299,8 +291,6 @@ Value smsginbox(const Array& params, bool fHelp)
         
         if (mode == "clear")
         {
-            //result.push_back(Pair("result", "Clear not implemented yet."));
-            
             Dbc* pcursor = dbInbox.GetAtCursor();
             if (!pcursor)
                 throw runtime_error("Cannot get inbox DB cursor");
@@ -339,7 +329,6 @@ Value smsginbox(const Array& params, bool fHelp)
                 {
                     if (datKey.get_size() > datKey.get_ulen())
                     {
-                        //printf("Resizing vchKeyData %d\n", datKey.get_size());
                         vchKeyData.resize(datKey.get_size());
                         datKey.set_ulen(vchKeyData.size());
                         datKey.set_data(&vchKeyData[0]);
@@ -347,12 +336,11 @@ Value smsginbox(const Array& params, bool fHelp)
                     
                     if (datValue.get_size() > datValue.get_ulen())
                     {
-                        //printf("Resizing vchValueData %d\n", datValue.get_size());
                         vchValueData.resize(datValue.get_size());
                         datValue.set_ulen(vchValueData.size());
                         datValue.set_data(&vchValueData[0]);
                     };
-                    // try once more, when DB_BUFFER_SMALL cursor is not expected to move
+                    // -- try once more, when DB_BUFFER_SMALL cursor is not expected to move
                     ret = pcursor->get(&datKey, &datValue, fFlags);
                 };
                 
@@ -407,8 +395,6 @@ Value smsginbox(const Array& params, bool fHelp)
         {
             SecInboxMsg smsgInbox;
 
-            //dbInbox.WriteSmesg(vchKey, vchData);
-            
             dbInbox.ReadUnread(vchUnread);
             
             //result.push_back(Pair("unread", ValueString(vchUnread).c_str()));
@@ -538,8 +524,6 @@ Value smsgoutbox(const Array& params, bool fHelp)
         
         if (mode == "clear")
         {
-            //result.push_back(Pair("result", "Clear not implemented yet."));
-            
             Dbc* pcursor = dbOutbox.GetAtCursor();
             if (!pcursor)
                 throw runtime_error("Cannot get outbox DB cursor");
@@ -578,7 +562,6 @@ Value smsgoutbox(const Array& params, bool fHelp)
                 {
                     if (datKey.get_size() > datKey.get_ulen())
                     {
-                        //printf("Resizing vchKeyData %d\n", datKey.get_size());
                         vchKeyData.resize(datKey.get_size());
                         datKey.set_ulen(vchKeyData.size());
                         datKey.set_data(&vchKeyData[0]);
@@ -586,12 +569,11 @@ Value smsgoutbox(const Array& params, bool fHelp)
                     
                     if (datValue.get_size() > datValue.get_ulen())
                     {
-                        //printf("Resizing vchValueData %d\n", datValue.get_size());
                         vchValueData.resize(datValue.get_size());
                         datValue.set_ulen(vchValueData.size());
                         datValue.set_data(&vchValueData[0]);
                     };
-                    // try once more, when DB_BUFFER_SMALL cursor is not expected to move
+                    // -- try once more, when DB_BUFFER_SMALL cursor is not expected to move
                     ret = pcursor->get(&datKey, &datValue, fFlags);
                 };
                 
@@ -796,7 +778,7 @@ Value smsgbuckets(const Array& params, bool fHelp)
     {
         result.push_back(Pair("result", "Unknown Mode."));
         result.push_back(Pair("expected", "[stats|dump]."));
-    }
+    };
     
 
     return result;
