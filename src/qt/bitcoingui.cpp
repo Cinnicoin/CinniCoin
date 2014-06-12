@@ -268,7 +268,7 @@ void BitcoinGUI::createActions()
     receiptAction = new QAction(QIcon(":/icons/em"), tr("Re&ceipts"), this);
     receiptAction->setToolTip(tr("Encrypted Receipting"));
     receiptAction->setCheckable(false);  // TODO: Remove once Anonymous messaging and transactions have been implemented
-    invoiceAction->setEnabled(false);  // TODO: Remove once Anonymous messaging and transactions have been implemented
+    receiptAction->setEnabled(false);  // TODO: Remove once Anonymous messaging and transactions have been implemented
     receiptAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_8));
     tabGroup->addAction(receiptAction);
 
