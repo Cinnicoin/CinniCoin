@@ -38,7 +38,7 @@ Notes:
 #include "db.h"
 #include "init.h" // pwalletMain
 
-#include "lz4/lz4.h"
+
 #include "lz4/lz4.c"
 
 #include "xxhash/xxhash.h"
@@ -562,7 +562,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         if (fDebugSmsg)
             printf("smsgMsg vchData.size() %lu.\n", vchData.size());
         
-        SecureMsgReceive(vchData);
+        SecureMsgReceive(pfrom, vchData);
     } else
     if (strCommand == "smsgInv")
     {
@@ -1465,7 +1465,7 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData)
     return 0;
 };
 
-int SecureMsgReceive(std::vector<unsigned char>& vchData)
+int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData)
 {
     if (fDebugSmsg)
         printf("SecureMsgReceive().\n");
@@ -1485,6 +1485,7 @@ int SecureMsgReceive(std::vector<unsigned char>& vchData)
     if (nBunch == 0 || nBunch > 500)
     {
         printf("Error: Invalid no. messages in bunch %u.\n", nBunch);
+        pfrom->Misbehaving(1);
         return 1;
     };
     
@@ -1500,8 +1501,21 @@ int SecureMsgReceive(std::vector<unsigned char>& vchData)
             break;
         };
         
-        SecureMessage* psmsg;
-        psmsg = (SecureMessage*) &vchData[n];
+        SecureMessage* psmsg = (SecureMessage*) &vchData[n];
+        
+        int rv;
+        if ((rv = SecureMsgValidate(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload)) != 0)
+        {
+            // message dropped
+            if (rv == 2) // invalid proof of work
+            {
+                pfrom->Misbehaving(10);
+            } else
+            {
+                pfrom->Misbehaving(1);
+            };
+            continue;
+        };
         
         // -- store message, but don't hash bucket
         if (SecureMsgStore(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload, false) != 0)
@@ -1546,8 +1560,7 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
         return 1;
     };
     
-    SecureMessage* psmsg;
-    psmsg = (SecureMessage*) pHeader;
+    SecureMessage* psmsg = (SecureMessage*) pHeader;
     
     
     long int ofs;
@@ -1625,17 +1638,154 @@ int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket)
 {
     return SecureMsgStore(&smsg.hash[0], smsg.pPayload, smsg.nPayload, fUpdateBucket);
 };
-
-int SecureMsgGetHash(uint32_t& hashOut, unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload)
+  
+int SecureMsgValidate(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload)
 {
-    // -- checksum
+    /*
+    returns
+        0 success
+        1 error
+        2 invalid hash
+        3 checksum mismatch
+        4 invalid version
+        5 payload is too large
+    */
+    SecureMessage* psmsg = (SecureMessage*) pHeader;
     
+    if (psmsg->version != 1)
+        return 4;
+    
+    if (nPayload > SMSG_MAX_MSG_WORST)
+        return 5;
+    
+    unsigned char civ[32];
+    unsigned char sha256Hash[32];
+    int rv = 2; // invalid
+    
+    uint32_t nonse;
+    memcpy(&nonse, &psmsg->nonse[0], 4);
+    
+    if (fDebugSmsg)
+        printf("SecureMsgValidate() nonse %u.\n", nonse);
+    
+    for (int i = 0; i < 32; i+=4)
+        memcpy(civ+i, &nonse, 4);
+    
+    HMAC_CTX ctx;
+    HMAC_CTX_init(&ctx);
+    
+    unsigned int nBytes;
+    if (!HMAC_Init_ex(&ctx, &civ[0], 32, EVP_sha256(), NULL)
+        || !HMAC_Update(&ctx, (unsigned char*) pHeader+4, SMSG_HDR_LEN-4)
+        || !HMAC_Update(&ctx, (unsigned char*) pPayload, nPayload)
+        || !HMAC_Update(&ctx, pPayload, nPayload)
+        || !HMAC_Final(&ctx, sha256Hash, &nBytes)
+        || nBytes != 32)
+    {
+        if (fDebugSmsg)
+            printf("HMAC error.\n");
+        rv = 1; // error
+    } else
+    {
+        if (sha256Hash[31] == 0
+            && sha256Hash[30] == 0
+            && (~(sha256Hash[29]) & ((1<<0) || (1<<1) || (1<<2)) ))
+        {
+            if (fDebugSmsg)
+                printf("Hash Valid.\n");
+            rv = 0; // smsg is valid
+        };
+        
+        if (memcmp(psmsg->hash, sha256Hash, 4) != 0)
+        {
+             if (fDebugSmsg)
+                printf("Checksum mismatch.\n");
+            rv = 3; // checksum mismatch
+        }
+    }
+    HMAC_CTX_cleanup(&ctx);
+    
+    return rv;
+};
+
+int SecureMsgSetHash(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload)
+{
+    // -- proof of work and checksum
+    
+    /*
     void* state = XXH32_init(2);
     
     XXH32_update(state, pHeader+4, SMSG_HDR_LEN-4);
     XXH32_update(state, pPayload, nPayload);
     
     hashOut = XXH32_digest(state);
+    */
+    
+    SecureMessage* psmsg = (SecureMessage*) pHeader;
+    
+    int64_t nStart = GetTimeMillis();
+    unsigned char civ[32];
+    unsigned char sha256Hash[32];
+    bool found = false;
+    HMAC_CTX ctx;
+    HMAC_CTX_init(&ctx);
+    
+    uint32_t nonse = 0;
+    
+    // -- break for HMAC_CTX_cleanup
+    for (;;)
+    {
+        psmsg->timestamp = GetTime();
+        //memcpy(&psmsg->timestamp, &now, 8);
+        memcpy(&psmsg->nonse[0], &nonse, 4);
+        
+        for (int i = 0; i < 32; i+=4)
+            memcpy(civ+i, &nonse, 4);
+        
+        unsigned int nBytes;
+        if (!HMAC_Init_ex(&ctx, &civ[0], 32, EVP_sha256(), NULL)
+            || !HMAC_Update(&ctx, (unsigned char*) pHeader+4, SMSG_HDR_LEN-4)
+            || !HMAC_Update(&ctx, (unsigned char*) pPayload, nPayload)
+            || !HMAC_Update(&ctx, pPayload, nPayload)
+            || !HMAC_Final(&ctx, sha256Hash, &nBytes)
+            || nBytes != 32)
+            break;
+        
+         
+        if (sha256Hash[31] == 0
+            && sha256Hash[30] == 0
+            && (~(sha256Hash[29]) & ((1<<0) || (1<<1) || (1<<2)) ))
+        //    && sha256Hash[29] == 0)
+        {
+            found = true;
+            if (fDebugSmsg)
+                printf("Match %u\n", nonse);
+            break;
+        }
+        //if (nonse >= UINT32_MAX)
+        if (nonse >= 4294967295U)
+        {
+            if (fDebugSmsg)
+                printf("No match %u\n", nonse);
+            break;
+            //return 1; 
+        }    
+        nonse++;
+    };
+    
+    HMAC_CTX_cleanup(&ctx);
+    
+    if (!found)
+    {
+        if (fDebugSmsg)
+            printf("SecureMsgSetHash() failed, took %lld ms, nonse %u\n", GetTimeMillis() - nStart, nonse);
+        return 1;
+    };
+    
+    memcpy(psmsg->hash, sha256Hash, 4);
+    
+    if (fDebugSmsg)
+        printf("SecureMsgSetHash() took %lld ms, nonse %u\n", GetTimeMillis() - nStart, nonse);
     
     return 0;
 };
@@ -1892,14 +2042,13 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
         return 10;
     };
     
-    uint32_t checksumHash;
-    if (SecureMsgGetHash(checksumHash, &smsg.hash[0], smsg.pPayload, smsg.nPayload) != 0)
+    if (SecureMsgSetHash(&smsg.hash[0], smsg.pPayload, smsg.nPayload) != 0)
     {
         printf("Could not get checksum hash.\n");
         return 12;
     };
     
-    memcpy(&smsg.hash[0], &checksumHash, 4);
+    //memcpy(&smsg.hash[0], &checksumHash, 4);
     
     
     return 0;
@@ -1952,7 +2101,7 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
             case 9:  sError = "Could not compress message data.";           break;
             case 10: sError = "Could not generate MAC.";                    break;
             case 11: sError = "Encrypt failed.";                            break;
-            case 12: sError = "Could not get checksum hash.";               break;
+            case 12: sError = "Could not get proof of work hash.";          break;
             default: sError = "Unspecified Error.";                         break;
         };
         
@@ -2048,10 +2197,17 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
 
 int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, MessageData& msg)
 {
-    // -- address is the owned address to decrypt with.
-    //    if fTestOnly return after checking MAC
-    
-    // TODO validate SecureMessage, check hash, nPayload, etc
+    /* Decrypt secure message
+        
+        address is the owned address to decrypt with.
+        
+        validate first in SecureMsgValidate
+        
+        returns
+            1       Error
+            2       Unknown version number
+            3       Decrypt address is not valid.
+    */
     
     if (fDebugSmsg)
         printf("SecureMsgDecrypt(), using %s, testonly %d.\n", address.c_str(), fTestOnly);
@@ -2063,31 +2219,38 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeade
         return 1;
     };
     
-    SecureMessage* psmsg;
-    psmsg = (SecureMessage*) pHeader;
+    SecureMessage* psmsg = (SecureMessage*) pHeader;
+    
+    
+    if (psmsg->version != 1)
+    {
+        printf("Unknown version number.\n");
+        return 2;
+    };
+    
     
     
     // -- Fetch private key k, used to decrypt
     CBitcoinAddress coinAddrDest;
+    CKeyID ckidDest;
+    CKey keyDest;
     if (!coinAddrDest.SetString(address))
     {
-        printf("address is not valid.\n");
-        return 1;
+        printf("Address is not valid.\n");
+        return 3;
     };
-    
-    CKeyID ckidDest;
     if (!coinAddrDest.GetKeyID(ckidDest))
     {
         printf("coinAddrDest.GetKeyID failed: %s.\n", coinAddrDest.ToString().c_str());
-        return 1;
+        return 3;
     };
-    
-    CKey keyDest;
     if (!pwalletMain->GetKey(ckidDest, keyDest))
     {
         printf("Could not get private key for addressDest.\n");
-        return 1;
+        return 3;
     };
+    
+    
     
     CKey keyR;
     std::vector<unsigned char> vchR(psmsg->cpkR, psmsg->cpkR+33); // would be neater to override CPubKey() instead
@@ -2097,7 +2260,6 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeade
         printf("Could not get public key for key R.\n");
         return 1;
     };
-    
     if (!keyR.SetPubKey(cpkR))
     {
         printf("Could not set pubkey for R: %s.\n", ValueString(cpkR.Raw()).c_str());

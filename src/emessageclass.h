@@ -4,8 +4,8 @@
 #ifndef CINNICOIN_EMESSAGE_CLASS_H
 #define CINNICOIN_EMESSAGE_CLASS_H
 
-// length of unencrypted header, 4 + 1 + 8 + 20 + 16 + 33 + 32 + 4
-const unsigned int SMSG_HDR_LEN = 118;
+// length of unencrypted header, 4 + 1 + 8 + 20 + 16 + 33 + 32 + 4 +4
+const unsigned int SMSG_HDR_LEN = 122;
 
 // length of encrypted header in payload
 const unsigned int SMSG_PL_HDR_LEN = 1+20+65+4;
@@ -35,6 +35,7 @@ public:
     unsigned char   iv[16];
     unsigned char   cpkR[33];
     unsigned char   mac[32];
+    unsigned char   nonse[4];
     uint32_t        nPayload;
     unsigned char*  pPayload;
         

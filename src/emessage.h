@@ -10,6 +10,7 @@
 #include "db.h"
 #include "wallet.h"
 #include "emessageclass.h"
+#include "lz4/lz4.h"
 
 const unsigned int SMSG_BUCKET_LEN = 60 * 10;           // in seconds
 const unsigned int SMSG_RETENTION  = 60 * 60 * 48;      // in seconds
@@ -17,6 +18,9 @@ const unsigned int SMSG_RETENTION  = 60 * 60 * 48;      // in seconds
 const unsigned int SMSG_TIME_LEEWAY = 30;
 
 const unsigned int SMSG_MAX_MSG_BYTES = 2048;           // the user input part
+
+// maximum size of payload worst case compression ()
+const unsigned int SMSG_MAX_MSG_WORST = LZ4_COMPRESSBOUND(SMSG_MAX_MSG_BYTES+SMSG_PL_HDR_LEN);
 
 
 
@@ -267,14 +271,17 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey);
 
 int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData);
 
-int SecureMsgReceive(std::vector<unsigned char>& vchData);
+int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData);
 
 int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool fUpdateBucket);
 int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
 
+
+
 int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string& message, std::string& sError);
 
-int SecureMsgGetHash(uint32_t& hashOut, unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
+int SecureMsgValidate(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
+int SecureMsgSetHash(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
 
 int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string& addressTo, std::string& message);
 
