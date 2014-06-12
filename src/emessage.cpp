@@ -1735,7 +1735,7 @@ int SecureMsgSetHash(unsigned char *pHeader, unsigned char *pPayload, uint32_t n
     // -- break for HMAC_CTX_cleanup
     for (;;)
     {
-        psmsg->timestamp = GetTime();
+        //psmsg->timestamp = GetTime();
         //memcpy(&psmsg->timestamp, &now, 8);
         memcpy(&psmsg->nonse[0], &nonse, 4);
         
