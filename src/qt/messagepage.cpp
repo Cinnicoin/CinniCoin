@@ -16,20 +16,11 @@ MessagePage::MessagePage(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::MessagePage),
     model(0)
-    //optionsModel(0),
-    //mode(mode),
-    //tab(tab)
 {
     ui->setupUi(this);
 
 #ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
-    //ui->newAddressButton->setIcon(QIcon());
-    //ui->copyToClipboard->setIcon(QIcon());
     ui->deleteButton->setIcon(QIcon());
-#endif
-
-#ifndef USE_QRCODE
-    //ui->showQRCode->setVisible(false);
 #endif
 
     // Context menu actions
@@ -210,13 +201,12 @@ void MessagePage::done(int retval)
     QDialog::done(retval);
 }
 
-// TODO: Export Messages
 void MessagePage::exportClicked()
 {
     // CSV is currently the only supported format
     QString filename = GUIUtil::getSaveFileName(
             this,
-            tr("Export Address Book Data"), QString(),
+            tr("Export Messages"), QString(),
             tr("Comma separated file (*.csv)"));
 
     if (filename.isNull()) return;
@@ -225,8 +215,13 @@ void MessagePage::exportClicked()
 
     // name, column, role
     writer.setModel(proxyModel);
-    writer.addColumn("Label", MessageModel::Label, Qt::EditRole);
-    writer.addColumn("Address", MessageModel::ToAddress, Qt::EditRole);
+    writer.addColumn("Type",             MessageModel::Type,             Qt::DisplayRole);
+    writer.addColumn("Label",            MessageModel::Label,            Qt::DisplayRole);
+    writer.addColumn("FromAddress",      MessageModel::FromAddress,      Qt::DisplayRole);
+    writer.addColumn("ToAddress",        MessageModel::ToAddress,        Qt::DisplayRole);
+    writer.addColumn("SentDateTime",     MessageModel::SentDateTime,     Qt::DisplayRole);
+    writer.addColumn("ReceivedDateTime", MessageModel::ReceivedDateTime, Qt::DisplayRole);
+    writer.addColumn("Message",          MessageModel::Message,          Qt::DisplayRole);
 
     if(!writer.write())
     {

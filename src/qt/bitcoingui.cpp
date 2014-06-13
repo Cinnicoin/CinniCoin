@@ -8,6 +8,7 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 #include "messagepage.h"
+#include "invoicepage.h"
 #include "sendcoinsdialog.h"
 #include "sendmessagesdialog.h"
 #include "signverifymessagedialog.h"
@@ -112,8 +113,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     receiveCoinsPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
-    messagePage = new MessagePage(this);
-    //invoicePage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
+    messagePage = new MessagePage();
+    //invoicePage = new InvoicePage();
+
     //receiptPage = new AddressBookPage(AddressBookPage::ForEditing, AddressBookPage::ReceivingTab);
 
     sendCoinsPage = new SendCoinsDialog(this);
@@ -258,13 +260,15 @@ void BitcoinGUI::createActions()
 
     invoiceAction = new QAction(QIcon(":/icons/em"), tr("&Invoices"), this);
     invoiceAction->setToolTip(tr("Encrypted Invoicing"));
-    invoiceAction->setCheckable(true);
+    invoiceAction->setCheckable(false); // TODO: Remove once Anonymous messaging and transactions have been implemented
+    invoiceAction->setEnabled(false); // TODO: Remove once Anonymous messaging and transactions have been implemented
     invoiceAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
     tabGroup->addAction(invoiceAction);
 
     receiptAction = new QAction(QIcon(":/icons/em"), tr("Re&ceipts"), this);
     receiptAction->setToolTip(tr("Encrypted Receipting"));
-    receiptAction->setCheckable(true);
+    receiptAction->setCheckable(false);  // TODO: Remove once Anonymous messaging and transactions have been implemented
+    receiptAction->setEnabled(false);  // TODO: Remove once Anonymous messaging and transactions have been implemented
     receiptAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_8));
     tabGroup->addAction(receiptAction);
 
@@ -300,10 +304,10 @@ void BitcoinGUI::createActions()
     connect(sendMessagesAction, SIGNAL(triggered()), this, SLOT(gotoSendMessagesPage()));
     connect(messageAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(messageAction, SIGNAL(triggered()), this, SLOT(gotoMessagesPage()));
-    connect(invoiceAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(invoiceAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
-    connect(receiptAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(receiptAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
+    //connect(invoiceAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    //connect(invoiceAction, SIGNAL(triggered()), this, SLOT(gotoInvoicesPage()));
+    //connect(receiptAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    //connect(receiptAction, SIGNAL(triggered()), this, SLOT(gotoAddressBookPage()));
     connect(sendMessagesAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(sendMessagesAnonAction, SIGNAL(triggered()), this, SLOT(gotoSendMessagesAnonPage()));
     connect(sendCoinsAnonAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
@@ -520,7 +524,7 @@ void BitcoinGUI::setMessageModel(MessageModel *messageModel)
 void BitcoinGUI::setIRCModel(IRCModel *ircModel)
 {
     this->ircModel = ircModel;
-    //QMessageBox::critical(this, "test", ircModel->objectName(), QMessageBox::Ok, QMessageBox::Ok);
+
     if(ircModel)
     {
         // Report errors from wallet thread
@@ -915,7 +919,17 @@ void BitcoinGUI::gotoMessagesPage()
     messageAction->setChecked(true);
     centralWidget->setCurrentWidget(messagePage);
 
-    exportAction->setEnabled(false);
+    exportAction->setEnabled(true);
+    disconnect(exportAction, SIGNAL(triggered()), 0, 0);
+    connect(exportAction, SIGNAL(triggered()), messagePage, SLOT(exportClicked()));
+}
+
+void BitcoinGUI::gotoInvoicesPage()
+{
+    invoiceAction->setChecked(true);
+    centralWidget->setCurrentWidget(invoicePage);
+
+    exportAction->setEnabled(true);
     disconnect(exportAction, SIGNAL(triggered()), 0, 0);
 }
 

@@ -374,6 +374,8 @@ MessageModel::StatusCode MessageModel::sendMessages(const QList<SendMessagesReci
             QMessageBox::warning(NULL, tr("Send Secure Message"),
                 tr("Send failed: %1.").arg(sError.c_str()),
                 QMessageBox::Ok, QMessageBox::Ok);
+
+            return InvalidAddress;
         };
 
         // Add addresses / update labels that we've sent to to the address book

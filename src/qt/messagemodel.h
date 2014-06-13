@@ -1,6 +1,8 @@
 #ifndef MESSAGEMODEL_H
 #define MESSAGEMODEL_H
 
+#include "uint256.h"
+
 #include <vector>
 #include "allocators.h" /* for SecureString */
 #include "emessage.h"
@@ -44,8 +46,58 @@ struct MessageTableEntry
     QString message;
 
     MessageTableEntry() {}
-    MessageTableEntry(const std::vector<unsigned char> vchKey, Type type, const QString &label, const QString &to_address, const QString &from_address, const QDateTime &sent_datetime, const QDateTime &received_datetime, const QString &message):
-        vchKey(vchKey), type(type), label(label), to_address(to_address), from_address(from_address), sent_datetime(sent_datetime), received_datetime(received_datetime), message(message) {}
+    MessageTableEntry(const std::vector<unsigned char> vchKey, Type type, const QString &label, const QString &to_address, const QString &from_address,
+                      const QDateTime &sent_datetime, const QDateTime &received_datetime, const QString &message):
+        vchKey(vchKey), type(type), label(label), to_address(to_address), from_address(from_address), sent_datetime(sent_datetime), received_datetime(received_datetime),
+        message(message) {}
+};
+
+struct InvoiceItemTableEntry
+{
+
+    std::vector<unsigned char> vchKey;
+    QString code;
+    QString description;
+    int     quantity;
+    int64   rate;
+    bool    tax;
+    int64   amount;
+
+    InvoiceItemTableEntry() {}
+    InvoiceItemTableEntry(const std::vector<unsigned char> vchKey, const QString &code, const QString &description, const int &quantity, const int64 &rate, const bool &tax, const int64 &amount):
+        vchKey(vchKey), code(code), description(description), quantity(quantity), rate(rate), tax(tax), amount(amount) {}
+};
+
+struct InvoiceTableEntry
+{
+    enum Type {
+        Sent,
+        Received
+    };
+
+    std::vector<unsigned char> vchKey;
+    Type type;
+    QString label;
+    QString to_address;
+    QString from_address;
+    QDateTime sent_datetime;
+    QDateTime received_datetime;
+    QString company_info_left;
+    QString company_info_right;
+    QString billing_info_left;
+    QString billing_info_right;
+    QString invoice_number;
+    QDate   due_date;
+    InvoiceItemTableEntry item;
+
+    InvoiceTableEntry() {}
+    InvoiceTableEntry(const std::vector<unsigned char> vchKey, Type type, const QString &label, const QString &to_address, const QString &from_address,
+                      const QDateTime &sent_datetime, const QDateTime &received_datetime, const QString &company_info_left, const QString &company_info_right,
+                      const QString &billing_info_left, const QString &billing_info_right, const QString &invoice_number, const QDate &due_date, const InvoiceItemTableEntry &item):
+        vchKey(vchKey), type(type), label(label), to_address(to_address), from_address(from_address), sent_datetime(sent_datetime), received_datetime(received_datetime),
+        company_info_left(company_info_left), company_info_right(company_info_right), billing_info_left(billing_info_left), billing_info_right(billing_info_right),
+        invoice_number(invoice_number), due_date(due_date), item(item)
+    {}
 };
 
 /** Interface to Cinnicoin Secure Messaging from Qt view code. */
@@ -91,7 +143,6 @@ public:
     int rowCount(const QModelIndex &parent) const;
     int columnCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
-    //bool setData(const QModelIndex & index, const QVariant & value, int role);
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent) const;
     bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
@@ -130,9 +181,9 @@ public slots:
     void pollMessages();
     void newMessage(const SecInboxMsg& smsgInbox);
     void newOutboxMessage(const SecOutboxMsg& smsgOutbox);
-    
 
     friend class MessageTablePriv;
+    friend class InvoiceTablePriv;
 
 signals:
     // Asynchronous error notification

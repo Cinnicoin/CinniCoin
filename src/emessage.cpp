@@ -354,7 +354,7 @@ std::string getTimeString(int64_t timestamp, char *buffer, size_t nBuffer)
     struct tm* dt;
     time_t t = timestamp;
     dt = localtime(&t);
-    //dt = localtime(&timestamp);
+    
     strftime(buffer, nBuffer, "%Y-%m-%d %H:%M:%S %Z ", dt);
     return std::string(buffer); // Copies the null-terminated character sequence
 };
@@ -2467,4 +2467,3 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, SecureMessage& smsg, 
 {
     return SecureMsgDecrypt(fTestOnly, address, &smsg.hash[0], smsg.pPayload, smsg.nPayload, msg);
 };
-
