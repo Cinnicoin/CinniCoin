@@ -431,7 +431,7 @@ Value smsginbox(const Array& params, bool fHelp)
                     };
                 };
                 
-                snprintf(cbuf, sizeof(cbuf), "%lu unread messages shown.", nMessages);
+                snprintf(cbuf, sizeof(cbuf), "%"PRIszu" unread messages shown.", nMessages);
                 result.push_back(Pair("result", std::string(cbuf)));
                 vchUnread.resize(0);
                 dbInbox.WriteUnread(vchUnread);
@@ -708,7 +708,7 @@ Value smsgbuckets(const Array& params, bool fHelp)
                 std::string sBucket = boost::lexical_cast<std::string>(it->first);
                 std::string sFile = sBucket + "_01.dat";
                 
-                snprintf(cbuf, sizeof(cbuf), "%lu", tokenSet.size());
+                snprintf(cbuf, sizeof(cbuf), "%"PRIszu, tokenSet.size());
                 std::string snContents(cbuf);
                 
                 std::string sHash = boost::lexical_cast<std::string>(it->second.hash);
