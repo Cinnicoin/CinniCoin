@@ -94,13 +94,15 @@ public:
     {
         timeChanged     = 0;
         hash            = 0;
+        nLockCount      = 0;
     };
     ~SecMsgBucket() {};
     
     void hashBucket();
     
     int64_t                     timeChanged;
-    uint32_t                    hash; // token set should be ordered the same on each node
+    uint32_t                    hash;           // token set should get ordered the same on each node
+    uint32_t                    nLockCount;     // set when smsgWant first sent, unset at end of smsgMsg, ticks down in ThreadSecureMsg()
     std::set<SecMsgToken>       setTokens;
     
 };

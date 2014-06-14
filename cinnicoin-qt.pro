@@ -32,6 +32,9 @@ OBJECTS_DIR = build
 MOC_DIR = build
 UI_DIR = build
 
+
+
+
 # use: qmake "RELEASE=1"
 contains(RELEASE, 1) {
     # Mac: compile for maximum compatibility (10.5, 32-bit)
@@ -49,7 +52,11 @@ QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 # We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
 # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
+
+# When compiling for 64bit systems only:
+DEFINES += IS_ARCH_64
 }
+
 # for extra security on Windows: enable ASLR and DEP via GCC linker flags
 win32:QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
 # on Windows: enable GCC large address aware linker flag

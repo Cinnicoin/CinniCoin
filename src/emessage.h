@@ -12,10 +12,13 @@
 #include "emessageclass.h"
 #include "lz4/lz4.h"
 
-const unsigned int SMSG_BUCKET_LEN = 60 * 10;           // in seconds
-const unsigned int SMSG_RETENTION  = 60 * 60 * 48;      // in seconds
+const unsigned int SMSG_BUCKET_LEN      = 60 * 10;           // in seconds
+const unsigned int SMSG_RETENTION       = 60 * 60 * 48;      // in seconds
+const unsigned int SMSG_SEND_DELAY      = 10;                // in seconds, SecureMsgSendData will delay this long between firing
+const unsigned int SMSG_THREAD_DELAY    = 20;
 
 const unsigned int SMSG_TIME_LEEWAY = 60;
+
 
 const unsigned int SMSG_MAX_MSG_BYTES = 2048;           // the user input part
 
