@@ -15,7 +15,7 @@
 const unsigned int SMSG_BUCKET_LEN = 60 * 10;           // in seconds
 const unsigned int SMSG_RETENTION  = 60 * 60 * 48;      // in seconds
 
-const unsigned int SMSG_TIME_LEEWAY = 30;
+const unsigned int SMSG_TIME_LEEWAY = 60;
 
 const unsigned int SMSG_MAX_MSG_BYTES = 2048;           // the user input part
 

@@ -44,6 +44,19 @@ Notes:
 #include "xxhash/xxhash.h"
 #include "xxhash/xxhash.c"
 
+
+// On 64 bit system ld is 64bits
+// set IS_ARCH_64 in makefile
+#ifdef IS_ARCH_64
+#undef PRI64d
+#undef PRI64u
+#undef PRI64x
+#define PRI64d  "ld"
+#define PRI64u  "lu"
+#define PRI64x  "lx"
+#endif // IS_ARCH_64
+
+
 // TODO: For buckets older than current, only need to store length and hash in memory
 
 boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
@@ -321,7 +334,6 @@ void ThreadSecureMsg(void* parg)
                 //    printf("Checking bucket %"PRI64d", size %"PRIszu" \n", it->first, it->second.setTokens.size());
                 if (it->first < cutoffTime)
                 {
-                    
                     if (fDebugSmsg)
                         printf("Removing bucket %"PRI64d" \n", it->first);
                     std::string fileName = boost::lexical_cast<std::string>(it->first) + "_01.dat";
@@ -456,10 +468,16 @@ bool SecureMsgStart(bool fScanChain)
                     long int ofs = ftell(fp);
                     SecMsgToken token;
                     token.offset = ofs;
+                    errno = 0;
                     if (fread(&smsg.hash[0], sizeof(unsigned char), SMSG_HDR_LEN, fp) != (size_t)SMSG_HDR_LEN)
                     {
-                        printf("fread header failed: %s\n", strerror(errno));
-                        printf("End of file?\n");
+                        if (errno != 0)
+                        {
+                            printf("fread header failed: %s\n", strerror(errno));
+                        } else
+                        {
+                            //printf("End of file.\n");
+                        };
                         break;
                     };
                     token.timestamp = smsg.timestamp;
@@ -529,11 +547,11 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         if (fDebugSmsg)
              printf("Peer replied, secure messaging enabled.\n");
         
-        pfrom->smsgData.enabled = true;
+        pfrom->smsgData.fEnabled = true;
     }
     if (strCommand == "smsgPing")
     {
-        // smsgPing is the initial messahe, reply
+        // -- smsgPing is the initial message, send reply
         pfrom->PushMessage("smsgPong");
     } else
     if (strCommand == "smsgMatch")
@@ -541,7 +559,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         std::vector<unsigned char> vchData;
         vRecv >> vchData;
         
-        int64_t time;
+        
         if (vchData.size() < 8)
         {
             printf("smsgMatch, not enough data %"PRIszu".\n", vchData.size());
@@ -549,7 +567,18 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             return false;
         };
         
+        int64_t time;
         memcpy(&time, &vchData[0], 8);
+        
+        int64_t now = GetTime();
+        if (time > now + SMSG_TIME_LEEWAY)
+        {
+            printf("Warning: Peer buckets matched in the future: %"PRI64d".\nEither this node or the peer node has the incorrect time set.\n", time);
+            if (fDebugSmsg)
+                printf("Peer match time set to now.\n");
+            time = now;
+        };
+        
         pfrom->smsgData.lastMatched = time;
         
         if (fDebugSmsg)
@@ -611,7 +640,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             memcpy(&time, p, 8);
             memcpy(&ncontent, p+8, 4);
             memcpy(&hash, p+12, 4);
-			
+            
             p += 16;
             
             // Check time valid:
@@ -619,27 +648,36 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             {
                 if (fDebugSmsg)
                     printf("Not interested in peer bucket %"PRI64d", has expired.\n", time);
-                pfrom->Misbehaving(1);
+                
+                if (time < now - SMSG_RETENTION - SMSG_TIME_LEEWAY)
+                    pfrom->Misbehaving(1);
                 continue;
             };
             if (time > now + SMSG_TIME_LEEWAY)
             {
                 if (fDebugSmsg)
                     printf("Not interested in peer bucket %"PRI64d", in the future.\n", time);
-                pfrom->Misbehaving(5);
+                pfrom->Misbehaving(1);
+                continue;
+            };
+            
+            if (ncontent < 1)
+            {
+                if (fDebugSmsg)
+                    printf("Peer sent empty bucket, ignore %"PRI64d" %u %u.\n", time, ncontent, hash);
                 continue;
             };
             
             if (fDebugSmsg)
             {
                 printf("peer bucket %"PRI64d" %u %u.\n", time, ncontent, hash);
-                printf("this bucket %"PRI64d" %u %u.\n", time, smsgSets[time].setTokens.size(), smsgSets[time].hash);
+                printf("this bucket %"PRI64d" %"PRIszu" %u.\n", time, smsgSets[time].setTokens.size(), smsgSets[time].hash);
             };
             
             // -- if this node has more than the peer node, peer node will pull from this
             //    if then peer node has more this node will pull fom peer
             if (smsgSets[time].setTokens.size() < ncontent
-                || (smsgSets[time].setTokens.size() == ncontent && ncontent > 0
+                || (smsgSets[time].setTokens.size() == ncontent
                     && smsgSets[time].hash != hash)) // if same amount in buckets check hash
             {
                 if (fDebugSmsg)
@@ -735,10 +773,18 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         memcpy(&time, &vchData[0], 8);
         
         // Check time valid:
-        if (time < GetTime() - SMSG_RETENTION)
+        int64_t now = GetTime();
+        if (time < now - SMSG_RETENTION)
         {
             if (fDebugSmsg)
                 printf("Not interested in peer bucket %"PRI64d", has expired.\n", time);
+            return false;
+        };
+        if (time > now + SMSG_TIME_LEEWAY)
+        {
+            if (fDebugSmsg)
+                printf("Not interested in peer bucket %"PRI64d", in the future.\n", time);
+            pfrom->Misbehaving(1);
             return false;
         };
         
@@ -818,8 +864,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             {
                 //printf("Have message at %"PRI64d".\n", it->offset);
                 token.offset = it->offset;
-				
-				//printf("winb before SecureMsgRetrieve %"PRI64d".\n", token.timestamp);
+                //printf("winb before SecureMsgRetrieve %"PRI64d".\n", token.timestamp);
                 
                 // -- put in vchOne so if SecureMsgRetrieve fails it won't corrupt vchBunch
                 if (SecureMsgRetrieve(token, vchOne) == 0)
@@ -829,7 +874,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
                 } else
                 {
                     printf("SecureMsgRetrieve failed %"PRI64d".\n", token.timestamp);
-                }
+                };
                 
                 if (nBunch >= 500
                     || vchBunch.size() >= 96000)
@@ -878,18 +923,28 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
         // -- first contact
         if (fDebugSmsg)
             printf("SecureMsgSendData() new node %s.\n", pto->addrName.c_str());
-        // -- Send smsgPing once, do nothing until receive 1st smsgPong (then set enabled)
+        // -- Send smsgPing once, do nothing until receive 1st smsgPong (then set fEnabled)
         pto->PushMessage("smsgPing");
         pto->smsgData.lastSeen = GetTime();
         return true;
     } else
-    if (!pto->smsgData.enabled
+    if (!pto->smsgData.fEnabled
         || now - pto->smsgData.lastSeen < 15)
     {
         return true;
     };
     
-    
+    // -- When nWakeCounter == 0, resend bucket inventory.  
+    if (pto->smsgData.nWakeCounter < 1)
+    {
+        pto->smsgData.lastMatched = 0;
+        pto->smsgData.nWakeCounter = 3 + GetRandInt(120);  // set to a random time between [3, 120] * 15 seconds
+        
+        if (fDebugSmsg)
+            printf("SecureMsgSendData(): nWakeCounter expired, sending bucket inventory to %s.\n"
+            "Now %"PRI64d" next wake counter %u\n", pto->addrName.c_str(), now, pto->smsgData.nWakeCounter);
+    };
+    pto->smsgData.nWakeCounter--;
     
     {
         LOCK(cs_smsg);
@@ -899,7 +954,7 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
         if (nbuckets > 0) // no need to send keep alive pkts, coin messages already do that
         {
             std::vector<unsigned char> vchData;
-            // hmm should reserve?
+            // should reserve?
             vchData.reserve(4 + nbuckets*16); // timestamp + size + hash
             
             uint32_t nbucketsShown = 0;
@@ -910,15 +965,18 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
             {
                 SecMsgBucket &bkt = it->second;
                 
-                if (bkt.timeChanged < pto->smsgData.lastMatched)
-                    continue; // peer has this bucket
+                uint32_t nMessages = bkt.setTokens.size();
                 
-                uint32_t size = bkt.setTokens.size();
+                if (bkt.timeChanged < pto->smsgData.lastMatched     // peer has this bucket
+                    || nMessages < 1)                               // this bucket is empty
+                    continue; 
+                
+                
                 uint32_t hash = bkt.hash;
                 
                 vchData.resize(vchData.size() + 16);
                 memcpy(p, &it->first, 8);
-                memcpy(p+8, &size, 4);
+                memcpy(p+8, &nMessages, 4);
                 memcpy(p+12, &hash, 4);
                 
                 p += 16;
@@ -1425,13 +1483,13 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData)
     
     fs::path pathSmsgDir = GetDataDir() / "smsgStore";
     
-	
+    
     int64_t bucket = token.timestamp - (token.timestamp % SMSG_BUCKET_LEN);
     std::string fileName = boost::lexical_cast<std::string>(bucket) + "_01.dat";
     //printf("bucket %"PRI64d".\n", bucket);
-	//printf("bucket lld %lld.\n", bucket);
-	//printf("fileName %s.\n", fileName.c_str());
-	
+    //printf("bucket lld %lld.\n", bucket);
+    //printf("fileName %s.\n", fileName.c_str());
+    
     fs::path fullpath = pathSmsgDir / fileName;
     
     FILE *fp;
@@ -1462,7 +1520,7 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData)
     
     if (fread(&vchData[SMSG_HDR_LEN], sizeof(unsigned char), smsg.nPayload, fp) != smsg.nPayload)
     {
-        printf("fread data failed: %s\n", strerror(errno));
+        printf("fread data failed: %s. Wanted %u bytes.\n", strerror(errno), smsg.nPayload);
         fclose(fp);
         return 1;
     };
@@ -1497,7 +1555,24 @@ int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData)
         return 1;
     };
     
-    // TODO: check bktTime (bucket may not exist - will be created here)
+    
+    // -- check bktTime ()
+    //    bucket may not exist yet - will be created when messages are added
+    int64_t now = GetTime();
+    if (bktTime > now + SMSG_TIME_LEEWAY)
+    {
+        if (fDebugSmsg)
+            printf("bktTime > now.\n");
+        // misbehave?
+        return 1;
+    } else
+    if (bktTime < now - SMSG_RETENTION)
+    {
+        if (fDebugSmsg)
+            printf("bktTime < now - SMSG_RETENTION.\n");
+        // misbehave?
+        return 1;
+    };
     
     uint32_t n = 12;
     
@@ -1577,7 +1652,7 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
     fs::create_directory(pathSmsgDir);
     
     int64_t now = GetTime();
-    if (psmsg->timestamp > now)
+    if (psmsg->timestamp > now + SMSG_TIME_LEEWAY)
     {
         printf("Message > now.\n");
         return 1;

@@ -723,15 +723,28 @@ Value smsgbuckets(const Array& params, bool fHelp)
                 objM.push_back(Pair("hash", sHash));
                 objM.push_back(Pair("last changed", getTimeString(it->second.timeChanged, cbuf, sizeof(cbuf))));
                 
-                try {
-                    boost::filesystem::path fullPath = GetDataDir() / "smsgStore" / sFile;
-                    uint64_t nFBytes = 0;
-                    nFBytes = boost::filesystem::file_size(fullPath);
-                    nBytes += nFBytes;
-                    objM.push_back(Pair("file size", fsReadable(nFBytes)));
-                } catch (const boost::filesystem::filesystem_error& ex)
+                boost::filesystem::path fullPath = GetDataDir() / "smsgStore" / sFile;
+
+
+                if (!boost::filesystem::exists(fullPath))
                 {
-                    objM.push_back(Pair("file size, error", ex.what()));
+                    // -- If there is a file for an empty bucket something is wrong.
+                    if (tokenSet.size() == 0)
+                        objM.push_back(Pair("file size", "Empty bucket."));
+                    else
+                        objM.push_back(Pair("file size, error", "File not found."));
+                } else
+                {
+                    try {
+                        
+                        uint64_t nFBytes = 0;
+                        nFBytes = boost::filesystem::file_size(fullPath);
+                        nBytes += nFBytes;
+                        objM.push_back(Pair("file size", fsReadable(nFBytes)));
+                    } catch (const boost::filesystem::filesystem_error& ex)
+                    {
+                        objM.push_back(Pair("file size, error", ex.what()));
+                    };
                 };
                 
                 result.push_back(Pair("bucket", objM));

@@ -114,14 +114,16 @@ public:
     {
         lastSeen        = 0;
         lastMatched     = 0;
-        enabled         = false;
+        nWakeCounter    = 0;
+        fEnabled        = false;
     };
     
     ~SecMsgNode() {};
     
     int64_t                     lastSeen;
     int64_t                     lastMatched;
-    bool                        enabled;
+    uint32_t                    nWakeCounter;
+    bool                        fEnabled;
     
 };
 

@@ -8,23 +8,23 @@ USE_UPNP:=-
 USE_IPV6:=1
 
 DEPSDIR?=/usr/local
-BOOST_SUFFIX?=-mgw46-mt-sd-1_54
+BOOST_SUFFIX?=-mgw48-mt-1_54
 
 INCLUDEPATHS= \
- -I"C:\deps\boost46-54" \
- -I"C:\deps\db\build_unix" \
- -I"C:\deps\ssl\include
+ -I"C:\deps\boost\include" \
+ -I"C:\deps\db-4.8.30.NC\build_unix" \
+ -I"C:\deps\openssl_1.0.1h\include"
  
 LIBPATHS= \
- -L"C:\deps\boost46-54\stage/lib" \
- -L"C:\deps\db\build_unix" \
- -L"C:\deps\ssl" 
+ -L"C:\deps\boost\lib" \
+ -L"C:\deps\db-4.8.30.NC\build_unix" \
+ -L"C:\deps\openssl_1.0.1h\lib" 
 
 LIBS= \
- -l boost_system-mgw46-mt-1_54 \
- -l boost_filesystem-mgw46-mt-1_54 \
- -l boost_program_options-mgw46-mt-1_54 \
- -l boost_thread-mgw46-mt-1_54 \
+ -l boost_system$(BOOST_SUFFIX) \
+ -l boost_filesystem$(BOOST_SUFFIX) \
+ -l boost_program_options$(BOOST_SUFFIX) \
+ -l boost_thread$(BOOST_SUFFIX) \
  -l db_cxx \
  -l ssl \
  -l crypto
