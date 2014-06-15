@@ -22,6 +22,50 @@ using namespace std;
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 
+
+
+Value smsgenable(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "smsgenable \n"
+            "Enable secure messaging.");
+    
+    if (fSecMsgEnabled)
+        throw runtime_error("Secure messaging is already enabled.");
+    
+    Object result;
+    if (!SecureMsgEnable())
+    {
+        result.push_back(Pair("result", "Failed to enable secure messaging."));
+    } else
+    {
+        result.push_back(Pair("result", "Enabled secure messaging."));
+    }
+    return result;
+}
+
+Value smsgdisable(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "smsgdisable \n"
+            "Disable secure messaging.");
+    if (!fSecMsgEnabled)
+        throw runtime_error("Secure messaging is already disabled.");
+    
+    
+    Object result;
+    if (!SecureMsgDisable())
+    {
+        result.push_back(Pair("result", "Failed to disable secure messaging."));
+    } else
+    {
+        result.push_back(Pair("result", "Disabled secure messaging."));
+    }
+    return result;
+}
+
 Value smsgscanchain(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -29,7 +73,7 @@ Value smsgscanchain(const Array& params, bool fHelp)
             "smsgscanchain \n"
             "Look for public keys in the block chain.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     Object result;
@@ -50,7 +94,7 @@ Value smsgaddkey(const Array& params, bool fHelp)
             "smsgaddkey <address> <pubkey>\n"
             "Add address, pubkey pair to database.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     std::string addr = params[0].get_str();
@@ -74,7 +118,7 @@ Value smsggetpubkey(const Array& params, bool fHelp)
             "Return the base58 encoded compressed public key for an address.\n"
             "Tests localkeys first, then looks in public key db.\n");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     
@@ -157,7 +201,7 @@ Value smsglistlocalkeys(const Array& params, bool fHelp)
             "smsglistlocalkeys\n"
             "List local addresses and public keys that this node can receive on.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     Object result;
@@ -209,7 +253,7 @@ Value smsgsend(const Array& params, bool fHelp)
             "smsgsend <addrFrom> <addrTo> <message>\n"
             "Send an encrypted message from addrFrom to addrTo.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     std::string addrFrom  = params[0].get_str();
@@ -237,7 +281,7 @@ Value smsgsendanon(const Array& params, bool fHelp)
             "smsgsendanon <addrTo> <message>\n"
             "Send an anonymous encrypted message to addrTo.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     std::string addrFrom  = "anon";
@@ -265,7 +309,7 @@ Value smsginbox(const Array& params, bool fHelp)
             "Decrypt and display all received messages.\n"
             "Warning: clear will delete all messages.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     std::string mode = "unread";
@@ -498,7 +542,7 @@ Value smsgoutbox(const Array& params, bool fHelp)
             "Decrypt and display all sent messages.\n"
             "Warning: clear will delete all sent messages.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     std::string mode = "all";
@@ -679,7 +723,7 @@ Value smsgbuckets(const Array& params, bool fHelp)
             "smsgbuckets [stats|dump]\n"
             "Display some statistics.");
     
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     std::string mode = "stats";

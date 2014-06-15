@@ -63,6 +63,7 @@ Notes:
 boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
 boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutboxChanged;
 
+bool fSecMsgEnabled = false;
 
 std::map<int64_t, SecMsgBucket> smsgSets;
 uint32_t nPeerIdCounter = 1;
@@ -376,9 +377,14 @@ void ThreadSecureMsg(void* parg)
     
     uint32_t delay = 0;
     
-    while (!fShutdown)
+    //while (!fShutdown)
+    while (fSecMsgEnabled)
     {
-        // sleep at end, then fShutdown is tested on wake
+        // shutdown thread waits 5 seconds, this should be less
+        Sleep(1000); // milliseconds
+        
+        if (!fSecMsgEnabled) // check again after sleep
+            break;
         
         delay++;
         if (delay < SMSG_THREAD_DELAY) // check every SMSG_THREAD_DELAY seconds
@@ -459,8 +465,6 @@ void ThreadSecureMsg(void* parg)
             };
         }; // LOCK(cs_smsg);
         
-        // shutdown thread waits 5 seconds, this should be less
-        Sleep(1000); // milliseconds
     };
     
     printf("ThreadSecureMsg exited.\n");
@@ -475,13 +479,14 @@ void ThreadSecureMsgPow(void* parg)
     std::vector<unsigned char> vchKey;
     SecOutboxMsg smsgOutbox;
     
-    while (!fShutdown)
+    //while (!fShutdown)
+    while (fSecMsgEnabled)
     {
         // sleep at end, then fShutdown is tested on wake
         {
             LOCK(cs_smsgSendQueue);
             
-            // TODO: How to tell if db was opened successfully? Ror now create db
+            // TODO: How to tell if db was opened successfully? For now create db
             CSmesgSendQueueDB dbSendQueue("cr+");
             
             // -- fifo
@@ -566,7 +571,7 @@ std::string getTimeString(int64_t timestamp, char *buffer, size_t nBuffer)
     time_t t = timestamp;
     dt = localtime(&t);
     
-    strftime(buffer, nBuffer, "%Y-%m-%d %H:%M:%S %Z ", dt);
+    strftime(buffer, nBuffer, "%Y-%m-%d %H:%M:%S %z", dt); // %Z shows long strings on windows
     return std::string(buffer); // Copies the null-terminated character sequence
 };
 
@@ -589,24 +594,17 @@ std::string fsReadable(uint64_t nBytes)
     return std::string(buffer);
 };
 
-
-/** called from AppInit2() in init.cpp */
-bool SecureMsgStart(bool fScanChain)
+int SecureMsgBuildBucketSet()
 {
-    if (fNoSmsg)
-    {
-        printf("Secure messaging not started.\n");
-        return false;
-    };
+    /*
+        Build the bucket set by scanning the files in the smsgStore dir.
+        
+        smsgSets should be empty
+    */
     
-    printf("Secure messaging starting.\n");
-    
-    
-    if (fScanChain)
-    {
-        SecureMsgScanBlockChain();
-    };
-    
+    if (fDebugSmsg)
+        printf("SecureMsgBuildBucketSet()\n");
+        
     int64_t now = GetTime();
     uint32_t nFiles = 0;
     uint32_t nMessages = 0;
@@ -710,15 +708,48 @@ bool SecureMsgStart(bool fScanChain)
             nMessages += tokenSet.size();
             
             if (fDebugSmsg)
-                printf("e smsgSets[fileTime].size() %"PRI64d", %"PRIszu"\n", fileTime, tokenSet.size());
+                printf("Bucket %"PRI64d" contains %"PRIszu" messages.\n", fileTime, tokenSet.size());
         };
     };
     
     printf("Processed %u files, loaded %"PRIszu" buckets containing %u messages.\n", nFiles, smsgSets.size(), nMessages);
     
+    return 0;
+};
+
+/** called from AppInit2() in init.cpp */
+bool SecureMsgStart(bool fDontStart, bool fScanChain)
+{
+    if (fDontStart)
+    {
+        printf("Secure messaging not started.\n");
+        return false;
+    };
+    
+    printf("Secure messaging starting.\n");
+    
+    fSecMsgEnabled = true;
+    
+    if (fScanChain)
+    {
+        SecureMsgScanBlockChain();
+    };
+    
+    if (SecureMsgBuildBucketSet() != 0)
+    {
+        printf("SecureMsg could not load bucket sets, secure messaging disabled.\n");
+        fSecMsgEnabled = false;
+        return false;
+    };
+    
     // -- start threads
-    NewThread(ThreadSecureMsg, NULL);
-    NewThread(ThreadSecureMsgPow, NULL);
+    if (!NewThread(ThreadSecureMsg, NULL)
+        || !NewThread(ThreadSecureMsgPow, NULL))
+    {
+        printf("SecureMsg could not start threads, secure messaging disabled.\n");
+        fSecMsgEnabled = false;
+        return false;
+    };
     
     return true;
 };
@@ -726,24 +757,108 @@ bool SecureMsgStart(bool fScanChain)
 /** called from Shutdown() in init.cpp */
 bool SecureMsgShutdown()
 {
-    if (fNoSmsg)
+    if (!fSecMsgEnabled)
         return false;
     
     printf("Stopping secure messaging.\n");
     
+    fSecMsgEnabled = false;
+    // -- main program will wait 5 seconds for threads to terminate.
     
     return true;
 };
 
 bool SecureMsgEnable()
 {
-    // TODO
+    // -- start secure messaging at runtime
+    if (fSecMsgEnabled)
+    {
+        printf("SecureMsgEnable: secure messaging is already enabled.\n");
+        return false;
+    };
+    
+    
+    {
+        LOCK(cs_smsg);
+        fSecMsgEnabled = true;
+        
+        smsgSets.clear(); // should be empty already
+        
+        if (SecureMsgBuildBucketSet() != 0)
+        {
+            printf("SecureMsgEnable: could not load bucket sets, secure messaging disabled.\n");
+            fSecMsgEnabled = false;
+            return false;
+        };
+        
+    }; // LOCK(cs_smsg);
+    
+    // -- start threads
+    if (!NewThread(ThreadSecureMsg, NULL)
+        || !NewThread(ThreadSecureMsgPow, NULL))
+    {
+        printf("SecureMsgEnable could not start threads, secure messaging disabled.\n");
+        fSecMsgEnabled = false;
+        return false;
+    };
+    
+    // -- ping each peer, don't know which have messaging enabled
+    {
+        LOCK(cs_vNodes);
+        BOOST_FOREACH(CNode* pnode, vNodes)
+        {
+            pnode->PushMessage("smsgPing");
+            pnode->PushMessage("smsgPong"); // Send pong as have missed initial ping sent by peer when it connected
+        };
+    }
+    
+    printf("Secure messaging enabled.\n");
     return true;
 };
 
 bool SecureMsgDisable()
 {
-    // TODO
+    // -- stop secure messaging at runtime
+    if (!fSecMsgEnabled)
+    {
+        printf("SecureMsgDisable: secure messaging is already disabled.\n");
+        return false;
+    };
+    
+    {
+        LOCK(cs_smsg);
+        fSecMsgEnabled = false;
+        
+        // -- clear smsgSets
+        std::map<int64_t, SecMsgBucket>::iterator it;
+        it = smsgSets.begin();
+        for (it = smsgSets.begin(); it != smsgSets.end(); ++it)
+        {
+            it->second.setTokens.clear();
+        };
+        smsgSets.clear();
+        
+        // -- tell each smsg enabled peer that this node is disabling
+        {
+            LOCK(cs_vNodes);
+            BOOST_FOREACH(CNode* pnode, vNodes)
+            {
+                if (!pnode->smsgData.fEnabled)
+                    continue;
+                
+                pnode->PushMessage("smsgDisabled");
+                pnode->smsgData.fEnabled = false;
+            };
+        }
+    
+    }; // LOCK(cs_smsg);
+    
+    // -- allow time for threads to stop
+    Sleep(3000); // milliseconds
+    // TODO be certain that threads have stopped
+    
+    
+    printf("Secure messaging disabled.\n");
     return true;
 };
 
@@ -886,8 +1001,8 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         } else
         if (nLocked < 1) // Don't report buckets as matched if any are locked
         {
-            // -- peer has no buckets we want, don't send until something changes
-            //    peer will still request buckets fom this node if needed (< ncontent)
+            // -- peer has no buckets we want, don't send them again until something changes
+            //    peer will still request buckets from this node if needed (< ncontent)
             vchDataOut.resize(8);
             memcpy(&vchDataOut[0], &now, 8);
             pfrom->PushMessage("smsgMatch", vchDataOut);
@@ -982,7 +1097,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
         if (smsgSets[time].nLockCount > 0)
         {
             if (fDebugSmsg)
-                printf("Bucket %"PRI64d" lock count %u, waiting for messages data from peer %u.\n", time, smsgSets[time].nLockCount, smsgSets[time].nLockPeerId);
+                printf("Bucket %"PRI64d" lock count %u, waiting for message data from peer %u.\n", time, smsgSets[time].nLockCount, smsgSets[time].nLockPeerId);
             return false;
         }; 
         
@@ -1992,6 +2107,14 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
         if (it != smsgSets[bucket].setTokens.end())
         {
             printf("Already have message.\n");
+            if (fDebugSmsg)
+            {
+                int64_t time;
+                printf("ts: %"PRI64d" sample ", token.timestamp);
+                for (int i = 0; i < 8;++i)
+                    printf("%c.\n", token.sample[i]);
+                printf("\n");
+            };
             return 1;
         };
         

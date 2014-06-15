@@ -27,7 +27,7 @@ const unsigned int SMSG_MAX_MSG_BYTES   = 2048;              // the user input p
 const unsigned int SMSG_MAX_MSG_WORST = LZ4_COMPRESSBOUND(SMSG_MAX_MSG_BYTES+SMSG_PL_HDR_LEN);
 
 
-
+extern bool fSecMsgEnabled;
 
 /** Inbox db changed.
  * @note called with lock cs_smsgInbox held.
@@ -294,8 +294,9 @@ std::string getTimeString(int64_t timestamp, char *buffer, size_t nBuffer);
 std::string fsReadable(uint64_t nBytes);
 
 
+int SecureMsgBuildBucketSet();
 
-bool SecureMsgStart(bool fScanChain);
+bool SecureMsgStart(bool fDontStart, bool fScanChain);
 bool SecureMsgShutdown();
 
 bool SecureMsgEnable();

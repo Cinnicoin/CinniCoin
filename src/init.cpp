@@ -856,7 +856,7 @@ bool AppInit2()
     
     // ********************************************************* Step 10.1: startup secure messaging
     
-    SecureMsgStart(GetBoolArg("-smsgscanchain"));
+    SecureMsgStart(fNoSmsg, GetBoolArg("-smsgscanchain"));
     
 
     // ********************************************************* Step 11: start node
