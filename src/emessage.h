@@ -17,10 +17,11 @@ const unsigned int SMSG_RETENTION       = 60 * 60 * 48;      // in seconds
 const unsigned int SMSG_SEND_DELAY      = 10;                // in seconds, SecureMsgSendData will delay this long between firing
 const unsigned int SMSG_THREAD_DELAY    = 20;
 
-const unsigned int SMSG_TIME_LEEWAY = 60;
+const unsigned int SMSG_TIME_LEEWAY     = 60;
+const unsigned int SMSG_TIME_IGNORE     = 90;                // seconds that a peer is ignored for if they fail to deliver messages for a smsgWant
 
 
-const unsigned int SMSG_MAX_MSG_BYTES = 2048;           // the user input part
+const unsigned int SMSG_MAX_MSG_BYTES   = 2048;              // the user input part
 
 // maximum size of payload worst case compression ()
 const unsigned int SMSG_MAX_MSG_WORST = LZ4_COMPRESSBOUND(SMSG_MAX_MSG_BYTES+SMSG_PL_HDR_LEN);
@@ -41,9 +42,10 @@ class SecOutboxMsg;
 extern boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutboxChanged;
 
 extern std::map<int64_t, SecMsgBucket> smsgSets;
-extern CCriticalSection cs_smsg; // all except inbox and outbox
+extern CCriticalSection cs_smsg;            // all except inbox and outbox
 extern CCriticalSection cs_smsgInbox;
 extern CCriticalSection cs_smsgOutbox;
+extern CCriticalSection cs_smsgSendQueue;
 
 
 // -- get at the data
@@ -226,6 +228,46 @@ public:
     }
 };
 
+class CSmesgSendQueueDB : public CDB
+{
+public:
+    CSmesgSendQueueDB(const char* pszMode="r+") : CDB("smsgSendQueue.dat", pszMode) { }
+    
+    Dbt datKey;
+    Dbt datValue;
+
+    std::vector<unsigned char> vchKeyData;
+    std::vector<unsigned char> vchValueData;
+    
+    Dbc* GetAtCursor()
+    {
+        return GetCursor();
+    }
+    
+    bool NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgOutbox);
+    
+    
+    bool ReadSmesg(std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgob)
+    {
+        return Read(vchKey, smsgob);
+    }
+    
+    bool WriteSmesg(std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgob)
+    {
+        return Write(vchKey, smsgob);
+    }
+    
+    bool ExistsSmesg(std::vector<unsigned char>& vchKey)
+    {
+        return Exists(vchKey);
+    }
+    
+    bool EraseSmesg(std::vector<unsigned char>& vchKey)
+    {
+        return Erase(vchKey);
+    }
+};
+
 class CSmesgPubKeyDB : public CDB
 {
 public:
@@ -254,7 +296,10 @@ std::string fsReadable(uint64_t nBytes);
 
 
 bool SecureMsgStart(bool fScanChain);
-bool SecureMsgStop();
+bool SecureMsgShutdown();
+
+bool SecureMsgEnable();
+bool SecureMsgDisable();
 
 bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRecv);
 bool SecureMsgSendData(CNode* pto, bool fSendTrickle);

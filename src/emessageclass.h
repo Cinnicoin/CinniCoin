@@ -95,6 +95,7 @@ public:
         timeChanged     = 0;
         hash            = 0;
         nLockCount      = 0;
+        nLockPeerId     = 0;
     };
     ~SecMsgBucket() {};
     
@@ -103,6 +104,7 @@ public:
     int64_t                     timeChanged;
     uint32_t                    hash;           // token set should get ordered the same on each node
     uint32_t                    nLockCount;     // set when smsgWant first sent, unset at end of smsgMsg, ticks down in ThreadSecureMsg()
+    uint32_t                    nLockPeerId;    // id of peer that bucket is locked for
     std::set<SecMsgToken>       setTokens;
     
 };
@@ -116,7 +118,9 @@ public:
     {
         lastSeen        = 0;
         lastMatched     = 0;
+        ignoreUntil     = 0;
         nWakeCounter    = 0;
+        nPeerId         = 0;
         fEnabled        = false;
     };
     
@@ -124,7 +128,9 @@ public:
     
     int64_t                     lastSeen;
     int64_t                     lastMatched;
+    int64_t                     ignoreUntil;
     uint32_t                    nWakeCounter;
+    uint32_t                    nPeerId;
     bool                        fEnabled;
     
 };
