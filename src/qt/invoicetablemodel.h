@@ -1,0 +1,4 @@
+#ifndef INVOICEMODEL_H
+#define INVOICEMODEL_H
+
+#endif // INVOICEMODEL_H
