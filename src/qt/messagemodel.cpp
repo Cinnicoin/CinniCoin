@@ -330,8 +330,9 @@ bool MessageModel::getAddressOrPubkey(QString &address, QString &pubkey) const
         CPubKey destinationKey;
 
         addressParsed.GetKeyID(destinationAddress);
-
-        if(SecureMsgGetStoredKey(destinationAddress, destinationKey) != 0)
+        
+        if (SecureMsgGetStoredKey(destinationAddress, destinationKey) != 0
+            && SecureMsgGetLocalKey(destinationAddress, destinationKey) != 0) // test if it's a local key
             return false;
 
         address = destinationAddress.ToString().c_str();

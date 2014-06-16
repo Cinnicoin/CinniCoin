@@ -101,11 +101,22 @@ Value smsgaddkey(const Array& params, bool fHelp)
     std::string pubk = params[1].get_str();
     
     Object result;
-    
-    if (SecureMsgAddAddress(addr, pubk) != 0)
+    int rv = SecureMsgAddAddress(addr, pubk);
+    if (rv != 0)
+    {
         result.push_back(Pair("result", "Public key not added to db."));
-    else
+        switch (rv)
+        {
+            case 2:     result.push_back(Pair("reason", "publicKey is invalid."));                  break;
+            case 3:     result.push_back(Pair("reason", "publicKey does not match address."));      break;
+            case 4:     result.push_back(Pair("reason", "address is already in db."));              break;
+            case 5:     result.push_back(Pair("reason", "address is invalid."));                    break;
+            default:    result.push_back(Pair("reason", "error."));                                 break;
+        };
+    } else
+    {
         result.push_back(Pair("result", "Added public key to db."));
+    };
     
     return result;
 }
