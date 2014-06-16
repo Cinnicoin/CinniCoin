@@ -1185,7 +1185,7 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
                     printf("Don't have wanted message %"PRI64d".\n", token.timestamp);
             } else
             {
-                //printf("Have message at %"PRI64d".\n", it->offset);
+                //printf("Have message at %"PRI64d".\n", it->offset); // DEBUG
                 token.offset = it->offset;
                 //printf("winb before SecureMsgRetrieve %"PRI64d".\n", token.timestamp);
                 
@@ -1420,8 +1420,8 @@ static int SecureMsgInsertAddress(CKeyID& hashKey, CPubKey& pubKey, CSmesgPubKey
         
         returns
             0 success
+            1 error
             4 address is already in db
-            5 error
     */
     
     
@@ -1443,7 +1443,7 @@ static int SecureMsgInsertAddress(CKeyID& hashKey, CPubKey& pubKey, CSmesgPubKey
     if (!addrpkdb.WritePK(hashKey, pubKey))
     {
         printf("Write pair failed.\n");
-        return 5;
+        return 1;
     };
     
     return 0;
@@ -1663,8 +1663,7 @@ bool SecureMsgScanBlockChain()
         };
         
         
-        try
-        { // -- in try to catch errors opening db, 
+        try { // -- in try to catch errors opening db, 
             if (!ScanChainForPublicKeys(pindexScan))
                 return false;
         } catch (std::exception& e)
@@ -1766,6 +1765,9 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
 
 int SecureMsgGetLocalKey(CKeyID& ckid, CPubKey& cpkOut)
 {
+    if (fDebugSmsg)
+        printf("SecureMsgGetLocalKey()\n");
+    
     CKey key;
     if (!pwalletMain->GetKey(ckid, key))
         return 4;
@@ -1821,15 +1823,20 @@ int SecureMsgGetStoredKey(CKeyID& ckid, CPubKey& cpkOut)
     if (fDebugSmsg)
         printf("SecureMsgGetStoredKey().\n");
     
-    CSmesgPubKeyDB addrpkdb("r");
-    
-    if (!addrpkdb.ReadPK(ckid, cpkOut))
+    try {
+        CSmesgPubKeyDB addrpkdb("r");
+        
+        if (!addrpkdb.ReadPK(ckid, cpkOut))
+        {
+            //printf("addrpkdb.Read failed: %s.\n", coinAddress.ToString().c_str());
+            return 2;
+        };
+        
+    } catch (std::exception& e)
     {
-        //printf("addrpkdb.Read failed: %s.\n", coinAddress.ToString().c_str());
-        return 2;
+        printf("SecureMsgGetStoredKey() threw: %s.\n", e.what());
+        return 1;
     };
-    
-    addrpkdb.Close(); // necessary?
     
     return 0;
 };
@@ -1842,11 +1849,11 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
         
         returns
             0 success
-            1 address is invalid
+            1 error
             2 publicKey is invalid
             3 publicKey != address
             4 address is already in db
-            5 error
+            5 address is invalid
     */
     
     CBitcoinAddress coinAddress(address);
@@ -1854,7 +1861,7 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
     if (!coinAddress.IsValid())
     {
         printf("Address is not valid: %s.\n", address.c_str());
-        return 1;
+        return 5;
     };
     
     CKeyID hashKey;
@@ -1862,7 +1869,7 @@ int SecureMsgAddAddress(std::string& address, std::string& publicKey)
     if (!coinAddress.GetKeyID(hashKey))
     {
         printf("coinAddress.GetKeyID failed: %s.\n", coinAddress.ToString().c_str());
-        return 1;
+        return 5;
     };
     
     std::vector<unsigned char> vchTest;
@@ -1900,14 +1907,14 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData)
     
     fs::path pathSmsgDir = GetDataDir() / "smsgStore";
     
-    
+    //printf("token.offset %"PRI64d".\n", token.offset); // DEBUG
     int64_t bucket = token.timestamp - (token.timestamp % SMSG_BUCKET_LEN);
     std::string fileName = boost::lexical_cast<std::string>(bucket) + "_01.dat";
+    fs::path fullpath = pathSmsgDir / fileName;
+    
     //printf("bucket %"PRI64d".\n", bucket);
     //printf("bucket lld %lld.\n", bucket);
     //printf("fileName %s.\n", fileName.c_str());
-    
-    fs::path fullpath = pathSmsgDir / fileName;
     
     FILE *fp;
     errno = 0;
@@ -1934,7 +1941,13 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData)
         return 1;
     };
     
-    vchData.resize(SMSG_HDR_LEN + smsg.nPayload);
+    try {
+        vchData.resize(SMSG_HDR_LEN + smsg.nPayload);
+    } catch (std::exception& e)
+    {
+        printf("SecureMsgRetrieve(): Could not resize vchData, %u, %s\n", SMSG_HDR_LEN + smsg.nPayload, e.what());
+        return 1;
+    };
     
     memcpy(&vchData[0], &smsg.hash[0], SMSG_HDR_LEN);
     errno = 0;
@@ -2007,7 +2020,7 @@ int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData)
     {
         if (vchData.size() - n < SMSG_HDR_LEN)
         {
-            printf("Error: not enough data, n = %u.\n", n);
+            printf("Error: not enough data sent, n = %u.\n", n);
             break;
         };
         
@@ -2033,7 +2046,6 @@ int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData)
             // message dropped
             break; // continue?
         };
-        
         
         if (SecureMsgScanMessage(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload) != 0)
         {
@@ -2075,9 +2087,15 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
     
     
     long int ofs;
-    
-    fs::path pathSmsgDir = GetDataDir() / "smsgStore";
-    fs::create_directory(pathSmsgDir);
+    fs::path pathSmsgDir;
+    try {
+        pathSmsgDir = GetDataDir() / "smsgStore";
+        fs::create_directory(pathSmsgDir);
+    } catch (const boost::filesystem::filesystem_error& ex)
+    {
+        printf("Error: Failed to create directory %s - %s\n", pathSmsgDir.string().c_str(), ex.what());
+        return 1;
+    };
     
     int64_t now = GetTime();
     if (psmsg->timestamp > now + SMSG_TIME_LEEWAY)
@@ -2092,9 +2110,6 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
     };
     
     int64_t bucket = psmsg->timestamp - (psmsg->timestamp % SMSG_BUCKET_LEN);
-    std::string fileName = boost::lexical_cast<std::string>(bucket) + "_01.dat";
-    
-    fs::path fullpath = pathSmsgDir / fileName;
     
     {
         // -- must lock cs_smsg before calling
@@ -2102,27 +2117,52 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
         
         SecMsgToken token(psmsg->timestamp, pPayload, nPayload, 0);
         
+        std::set<SecMsgToken>& tokenSet = smsgSets[bucket].setTokens;
         std::set<SecMsgToken>::iterator it;
-        it = smsgSets[bucket].setTokens.find(token);
-        if (it != smsgSets[bucket].setTokens.end())
+        it = tokenSet.find(token);
+        if (it != tokenSet.end())
         {
             printf("Already have message.\n");
             if (fDebugSmsg)
             {
-                int64_t time;
-                printf("ts: %"PRI64d" sample ", token.timestamp);
-                for (int i = 0; i < 8;++i)
-                    printf("%c.\n", token.sample[i]);
-                printf("\n");
+                printf("nPayload: %u\n", nPayload);
+                printf("bucket: %"PRI64d"\n", bucket);
+                
+                printf("message ts: %"PRI64d, token.timestamp);
+                std::vector<unsigned char> vchShow;
+                vchShow.resize(8);
+                memcpy(&vchShow[0], token.sample, 8);
+                printf(" sample %s\n", ValueString(vchShow).c_str());
+                /*
+                printf("\nmessages in bucket:\n");
+                for (it = tokenSet.begin(); it != tokenSet.end(); ++it)
+                {
+                    printf("message ts: %"PRI64d, (*it).timestamp);
+                    vchShow.resize(8);
+                    memcpy(&vchShow[0], (*it).sample, 8);
+                    printf(" sample %s\n", ValueString(vchShow).c_str());
+                };
+                */
             };
             return 1;
         };
+        
+        std::string fileName = boost::lexical_cast<std::string>(bucket) + "_01.dat";
+        fs::path fullpath = pathSmsgDir / fileName;
         
         FILE *fp;
         errno = 0;
         if (!(fp = fopen(fullpath.string().c_str(), "ab")))
         {
             printf("Error opening file: %s\n", strerror(errno));
+            return 1;
+        };
+        
+        // -- on windows ftell will always return 0 after fopen(ab), just for fun.
+        errno = 0;
+        if (fseek(fp, 0, SEEK_END) != 0)
+        {
+            printf("Error fseek failed: %s\n", strerror(errno));
             return 1;
         };
         
@@ -2137,11 +2177,12 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
             return 1;
         };
         
-        token.offset = ofs;
-        
         fclose(fp);
         
-        smsgSets[bucket].setTokens.insert(token);
+        token.offset = ofs;
+        
+        //printf("token.offset: %"PRI64d"\n", token.offset); // DEBUG
+        tokenSet.insert(token);
         
         if (fUpdateBucket)
             smsgSets[bucket].hashBucket();
@@ -2402,14 +2443,11 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     
     // -- public key K is the destination address
     CPubKey cpkDestK;
-    if (SecureMsgGetStoredKey(ckidDest, cpkDestK) != 0)
+    if (SecureMsgGetStoredKey(ckidDest, cpkDestK) != 0
+        && SecureMsgGetLocalKey(ckidDest, cpkDestK) != 0) // maybe it's a local key (outbox?)
     {
-        // -- maybe it's a local key (outbox?)
-        if (SecureMsgGetLocalKey(ckidDest, cpkDestK) != 0)
-        {
-            printf("Could not get public key for destination address.\n");
-            return 5;
-        };
+        printf("Could not get public key for destination address.\n");
+        return 5;
     };
     
     

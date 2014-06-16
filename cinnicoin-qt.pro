@@ -1,6 +1,6 @@
 TEMPLATE = app
 TARGET = CinniCoin-qt
-VERSION = 0.7.2
+VERSION = 1.1.0
 INCLUDEPATH += src src/json src/qt
 QT += network
 DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE BOOST_THREAD_PROVIDES_GENERIC_SHARED_MUTEX_ON_WIN __NO_SYSTEM_INCLUDES
@@ -20,19 +20,30 @@ windows:LIBS += -lshlwapi
 LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,)
 LIBS += -lssl -lcrypto -ldb_cxx$$BDB_LIB_SUFFIX
 windows:LIBS += -lws2_32 -lole32 -loleaut32 -luuid -lgdi32
-LIBS += -lboost_system -lboost_filesystem -lboost_program_options -lboost_thread
-#BOOST_LIB_SUFFIX=.1.54.0
+
+#BOOST_LIB_SUFFIX=-mgw48-mt-s-1_55
+#BOOST_INCLUDE_PATH=c:/deps/boost/include
+#BOOST_LIB_PATH=c:/deps/boost/lib
+
+BOOST_LIB_SUFFIX=
 BOOST_INCLUDE_PATH=/usr/include/boost
 BOOST_LIB_PATH=/usr/lib/x86_64-linux-gnu/
-BDB_INCLUDE_PATH=c:/deps/db/build_unix
-BDB_LIB_PATH=c:/deps/db/build_unix
-OPENSSL_INCLUDE_PATH=c:/deps/ssl/include
-OPENSSL_LIB_PATH=c:/deps/ssl
+
+LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_LIB_SUFFIX
+
+BDB_INCLUDE_PATH=c:/deps/db-4.8.30.NC/build_unix
+BDB_LIB_PATH=c:/deps/db-4.8.30.NC/build_unix
+OPENSSL_INCLUDE_PATH=c:/deps/openssl_1.0.1h/include
+OPENSSL_LIB_PATH=c:/deps/openssl_1.0.1h/lib/
+
+MINIUPNPC_INCLUDE_PATH=c:/deps/miniupnpc
+MINIUPNPC_LIB_PATH=c:/deps/miniupnpc
+
 OBJECTS_DIR = build
 MOC_DIR = build
 UI_DIR = build
 
-
+#USE_UPNP=-
 
 
 # use: qmake "RELEASE=1"
@@ -83,7 +94,7 @@ contains(USE_UPNP, -) {
     count(USE_UPNP, 0) {
         USE_UPNP=1
     }
-    DEFINES += USE_UPNP=$$USE_UPNP STATICLIB
+    DEFINES += USE_UPNP=$$USE_UPNP MINIUPNP_STATICLIB
     INCLUDEPATH += $$MINIUPNPC_INCLUDE_PATH
     LIBS += $$join(MINIUPNPC_LIB_PATH,,-L,) -lminiupnpc
     win32:LIBS += -liphlpapi
