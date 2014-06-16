@@ -43,6 +43,8 @@ class MessageTablePriv
 {
 public:
     QList<MessageTableEntry> cachedMessageTable;
+    QList<InvoiceTableEntry> cachedInvoiceTable;
+    QList<InvoiceItemTableEntry> cachedInvoiceItemTable;
     MessageModel *parent;
 
     MessageTablePriv(MessageModel *parent):
@@ -51,6 +53,8 @@ public:
     void refreshMessageTable()
     {
         cachedMessageTable.clear();
+        cachedInvoiceTable.clear();
+        cachedInvoiceItemTable.clear();
         
         Dbt datKey;
         Dbt datValue;
@@ -70,10 +74,8 @@ public:
         datValue.set_ulen(vchValueData.size());
         datValue.set_data(&vchValueData[0]);
 
-        
-        
         std::vector<unsigned char> vchKey;
-        
+
         {
             LOCK(cs_smsgInbox);
 
@@ -254,11 +256,6 @@ public:
         };
     }
 
-    int size()
-    {
-        return cachedMessageTable.size();
-    }
-
     MessageTableEntry *index(int idx)
     {
         if(idx >= 0 && idx < cachedMessageTable.size())
@@ -273,18 +270,15 @@ public:
 };
 
 MessageModel::MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *parent) :
-    //QObject(parent), wallet(wallet), walletModel(walletModel)
-    QAbstractTableModel(parent), wallet(wallet), walletModel(walletModel), priv(0)
+    QAbstractTableModel(parent), wallet(wallet), walletModel(walletModel), optionsModel(0), priv(0), invoiceTableModel(0)
 {
-
     columns << tr("Type") << tr("Sent Date Time") << tr("Recieved Date Time") << tr("Label") << tr("To Address") << tr("From Address") << tr("Message");
+
+    optionsModel = walletModel->getOptionsModel();
     priv = new MessageTablePriv(this);
     priv->refreshMessageTable();
 
-    // This timer will be fired repeatedly to check for messages
-    pollTimer = new QTimer(this);
-    connect(pollTimer, SIGNAL(timeout()), this, SLOT(pollMessages()));
-    pollTimer->start(MODEL_UPDATE_DELAY);
+    invoiceTableModel = new InvoiceTableModel(priv, parent);
 
     subscribeToCoreSignals();
 }
@@ -293,32 +287,6 @@ MessageModel::~MessageModel()
 {
     delete priv;
     unsubscribeFromCoreSignals();
-}
-
-int MessageModel::getNumReceivedMessages() const
-{
-    int numMessages = 0;
-    {
-    }
-
-    return numMessages;
-}
-
-int MessageModel::getNumSentMessages() const
-{
-    return 0;
-    //return message->getNumUnreadMessages();
-}
-
-int MessageModel::getNumUnreadMessages() const
-{
-    return 0;
-    //return message->getNumUnreadMessages();
-}
-
-void MessageModel::pollMessages()
-{
-
 }
 
 bool MessageModel::getAddressOrPubkey(QString &address, QString &pubkey) const
@@ -411,11 +379,21 @@ WalletModel *MessageModel::getWalletModel()
     return walletModel;
 }
 
+OptionsModel *MessageModel::getOptionsModel()
+{
+    return optionsModel;
+}
+
+InvoiceTableModel *MessageModel::getInvoiceTableModel()
+{
+    return invoiceTableModel;
+}
+
 
 int MessageModel::rowCount(const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    return priv->size();
+    return priv->cachedMessageTable.size();
 }
 
 int MessageModel::columnCount(const QModelIndex &parent) const
@@ -433,65 +411,39 @@ QVariant MessageModel::data(const QModelIndex &index, int role) const
 
     if(role == Qt::DisplayRole)
     {
-        switch(index.column())
-        {
-        case Label:
-            if(rec->label.isEmpty() && role == Qt::DisplayRole)
-            {
-                return tr("(no label)");
-            }
-            else
-            {
-                return rec->label;
-            }
-        case ToAddress:
-            return rec->to_address;
+	    switch(index.column())
+	    {
+	    case Label:
+	        return (rec->label.isEmpty() ? tr("(no label)") : rec->label);
+	    case ToAddress:
+	        return rec->to_address;
 
-        case FromAddress:
-            return rec->from_address;
+	    case FromAddress:
+	        return rec->from_address;
 
-        case SentDateTime:
-            return rec->sent_datetime;
+	    case SentDateTime:
+	        return rec->sent_datetime;
 
-        case ReceivedDateTime:
-            return rec->received_datetime;
+	    case ReceivedDateTime:
+	        return rec->received_datetime;
 
-        case Message:
-            return rec->message;
-        
-        case TypeInt:
-            return rec->type;
-        case Type:
-            switch(rec->type)
-            {
-            case MessageTableEntry::Sent:
-                return Sent;
-            case MessageTableEntry::Received:
-                return Received;
-            default: break;
-            }
-        }
+	    case Message:
+	        return rec->message;
+
+	    case TypeInt:
+	        return rec->type;
+	    case Type:
+	        switch(rec->type)
+	        {
+	        case MessageTableEntry::Sent:
+	            return Sent;
+	        case MessageTableEntry::Received:
+	            return Received;
+	        default: break;
+	        }
+	    }
     }
-    else if (role == Qt::FontRole)
-    {
-        QFont font;
-        if(index.column() == ToAddress || index.column() == FromAddress)
-        {
-            font = GUIUtil::bitcoinAddressFont();
-        }
-        return font;
-    }
-    else if (role == TypeRole)
-    {
-        switch(rec->type)
-        {
-        case MessageTableEntry::Sent:
-            return Sent;
-        case MessageTableEntry::Received:
-            return Received;
-        default: break;
-        }
-    }
+
     return QVariant();
 }
 
@@ -536,6 +488,42 @@ QModelIndex MessageModel::index(int row, int column, const QModelIndex & parent)
     }
 }
 
+bool MessageModel::removeRows(int row, int count, const QModelIndex & parent)
+{
+
+
+    MessageTableEntry *rec = priv->index(row);
+    if(count != 1 || !rec)
+    {
+        // Can only remove one row at a time, and cannot remove rows not in model.
+        // Also refuse to remove receiving addresses.
+        return false;
+    }
+
+    if(rec->type == MessageTableEntry::Received)
+    {
+
+        LOCK(cs_smsgInbox);
+        CSmesgInboxDB dbInbox("cr+");
+
+        dbInbox.EraseSmesg(rec->vchKey);
+
+    } else
+    if(rec->type == MessageTableEntry::Sent)
+    {
+        LOCK(cs_smsgOutbox);
+        CSmesgOutboxDB dbOutbox("cr+");
+
+        dbOutbox.EraseSmesg(rec->vchKey);
+    }
+
+    beginRemoveRows(parent, row, row);
+    priv->cachedMessageTable.removeAt(row);
+    endRemoveRows();
+
+    return true;
+}
+
 void MessageModel::newMessage(const SecInboxMsg &smsgInbox)
 {
     priv->newMessage(smsgInbox);
@@ -577,42 +565,267 @@ void MessageModel::unsubscribeFromCoreSignals()
     NotifySecMsgOutboxChanged.disconnect(boost::bind(NotifySecMsgOutbox, this, _1));
 }
 
-bool MessageModel::removeRows(int row, int count, const QModelIndex & parent)
+
+
+// InvoiceTableModel
+InvoiceTableModel::InvoiceTableModel(MessageTablePriv *priv, QObject *parent) :
+    QAbstractTableModel(parent), priv(priv), invoiceItemTableModel(0)
+{
+    columns << tr("Type") << tr("Sent Date Time") << tr("Recieved Date Time") << tr("Label") << tr("To Address") << tr("From Address") << tr("Invoice Number") << tr("Due Date") << "" << "" << "" << "" << "";
+
+    invoiceItemTableModel = new InvoiceItemTableModel(priv, parent);
+}
+
+InvoiceTableModel::~InvoiceTableModel()
+{
+
+}
+
+InvoiceItemTableModel *InvoiceTableModel::getInvoiceItemTableModel()
+{
+    return invoiceItemTableModel;
+}
+
+
+int InvoiceTableModel::rowCount(const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+    return priv->cachedInvoiceTable.size();
+}
+
+int InvoiceTableModel::columnCount(const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+    return columns.length();
+}
+
+QVariant InvoiceTableModel::data(const QModelIndex &index, int role) const
+{
+    if(!index.isValid())
+        return QVariant();
+
+    InvoiceTableEntry *rec = static_cast<InvoiceTableEntry*>(index.internalPointer());
+
+    switch(index.column())
+    {
+    case Label:
+        return (rec->label.isEmpty() ? tr("(no label)") : rec->label);
+    case ToAddress:
+        return rec->to_address;
+
+    case FromAddress:
+        return rec->from_address;
+
+    case SentDateTime:
+        return rec->sent_datetime;
+
+    case ReceivedDateTime:
+        return rec->received_datetime;
+    case CompanyInfoLeft:
+        return rec->company_info_left;
+    case CompanyInfoRight:
+        return rec->company_info_right;
+    case BillingInfoLeft:
+        return rec->billing_info_left;
+    case BillingInfoRight:
+        return rec->billing_info_right;
+    case InvoiceNumber:
+        return rec->invoice_number;
+    case DueDate:
+        return rec->due_date;
+    //case InvoiceItemTableEntry:
+    //    return rec->item;
+    case Type:
+        switch(rec->type)
+        {
+        case InvoiceTableEntry::Sent:
+            return MessageModel::Sent;
+        case InvoiceTableEntry::Received:
+            return MessageModel::Received;
+        default: break;
+        }
+    }
+
+    return QVariant();
+}
+
+QVariant InvoiceTableModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if(orientation == Qt::Horizontal)
+    {
+        if(role == Qt::DisplayRole)
+        {
+            return columns[section];
+        }
+    }
+    return QVariant();
+}
+
+Qt::ItemFlags InvoiceTableModel::flags(const QModelIndex & index) const
+{
+    if(!index.isValid())
+        return 0;
+
+    Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
+    // Can only label.
+    if(index.column()==Label)
+    {
+        retval |= Qt::ItemIsEditable;
+    }
+
+    return retval;
+}
+
+QModelIndex InvoiceTableModel::index(int row, int column, const QModelIndex & parent) const
+{
+    Q_UNUSED(parent);
+    if(row >= 0 && row < priv->cachedInvoiceTable.size())
+    {
+        return createIndex(row, column, &priv->cachedInvoiceTable[row]);
+    }
+    else
+    {
+        return QModelIndex();
+    }
+}
+
+bool InvoiceTableModel::removeRows(int row, int count, const QModelIndex & parent)
 {
 
 
-    MessageTableEntry *rec = priv->index(row);
-    if(count != 1 || !rec)
+    if(count != 1 || !(row >= 0 && row < priv->cachedInvoiceTable.size()))
     {
         // Can only remove one row at a time, and cannot remove rows not in model.
         // Also refuse to remove receiving addresses.
         return false;
     }
 
-    if(rec->type == MessageTableEntry::Received)
+    InvoiceTableEntry rec = priv->cachedInvoiceTable.at(row);
+
+    if(rec.type == InvoiceTableEntry::Received)
     {
 
         LOCK(cs_smsgInbox);
         CSmesgInboxDB dbInbox("cr+");
-        
-        dbInbox.EraseSmesg(rec->vchKey);
-        
+
+        dbInbox.EraseSmesg(rec.vchKey);
+
     } else
-    if(rec->type == MessageTableEntry::Sent)
+    if(rec.type == InvoiceTableEntry::Sent)
     {
         LOCK(cs_smsgOutbox);
         CSmesgOutboxDB dbOutbox("cr+");
-        
-        dbOutbox.EraseSmesg(rec->vchKey);
-    }
-    
 
-    //priv->cachedMessageTable.removeOne(priv->cachedMessageTable.at(row));
-    priv->parent->beginRemoveRows(parent, row, row);
-    priv->cachedMessageTable.removeAt(row);
-    priv->parent->endRemoveRows();
+        dbOutbox.EraseSmesg(rec.vchKey);
+    }
+
+    beginRemoveRows(parent, row, row);
+    priv->cachedInvoiceTable.removeAt(row);
+    endRemoveRows();
 
     return true;
 }
 
 
+// InvoiceItemTableModel
+InvoiceItemTableModel::InvoiceItemTableModel(MessageTablePriv *priv, QObject *parent) :
+    QAbstractTableModel(parent), priv(priv)
+{
+    columns << tr("Code") << tr("Description") << tr("Quantity") << tr("Price") << tr("Tax") << tr("From Address") << tr("Message");
+
+}
+
+InvoiceItemTableModel::~InvoiceItemTableModel()
+{
+
+}
+
+
+int InvoiceItemTableModel::rowCount(const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+    return priv->cachedInvoiceItemTable.size();
+    return 0;
+}
+
+int InvoiceItemTableModel::columnCount(const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+    return columns.length();
+}
+
+QVariant InvoiceItemTableModel::data(const QModelIndex &index, int role) const
+{
+    if(!index.isValid())
+        return QVariant();
+
+    InvoiceItemTableEntry *rec = static_cast<InvoiceItemTableEntry*>(index.internalPointer());
+
+    switch(index.column())
+    {
+    case Code:
+         return rec->code;
+    case Description:
+        return rec->description;
+    case Quantity:
+        return rec->quantity;
+    case Tax:
+        return rec->tax;
+    case Price:
+        return rec->price;
+    case Amount:
+        return (rec->quantity * rec->price);
+    }
+
+    return QVariant();
+}
+
+QVariant InvoiceItemTableModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if(orientation == Qt::Horizontal)
+    {
+        if(role == Qt::DisplayRole)
+        {
+            return columns[section];
+        }
+    }
+    return QVariant();
+}
+
+Qt::ItemFlags InvoiceItemTableModel::flags(const QModelIndex & index) const
+{
+    if(!index.isValid())
+        return 0;
+
+    return Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable;
+}
+
+QModelIndex InvoiceItemTableModel::index(int row, int column, const QModelIndex & parent) const
+{
+    Q_UNUSED(parent);
+    if(row >= 0 && row < priv->cachedInvoiceItemTable.size())
+    {
+        return createIndex(row, column, &priv->cachedInvoiceItemTable[row]);
+    }
+    else
+    {
+        return QModelIndex();
+    }
+}
+
+bool InvoiceItemTableModel::removeRows(int row, int count, const QModelIndex & parent)
+{
+
+    if(count != 1 || !(row >= 0 && row < priv->cachedInvoiceItemTable.size()))
+    {
+        // Can only remove one row at a time, and cannot remove rows not in model.
+        // Also refuse to remove receiving addresses.
+        return false;
+    }
+
+    beginRemoveRows(parent, row, row);
+    priv->cachedInvoiceItemTable.removeAt(row);
+    endRemoveRows();
+
+    return true;
+}
