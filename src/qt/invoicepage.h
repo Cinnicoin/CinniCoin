@@ -1,11 +1,13 @@
 #ifndef INVOICEPAGE_H
 #define INVOICEPAGE_H
 
-#include <QDialog>
+#include <QWidget>
 
 namespace Ui {
     class InvoicePage;
 }
+class MessageModel;
+class InvoiceTableModel;
 
 QT_BEGIN_NAMESPACE
 class QTableView;
@@ -15,16 +17,45 @@ class QMenu;
 class QModelIndex;
 QT_END_NAMESPACE
 
-class InvoicePage : public QDialog
+
+/** Widget that shows a list of sending or receiving addresses.
+  */
+class InvoicePage : public QWidget
 {
     Q_OBJECT
 
 public:
+
     explicit InvoicePage(QWidget *parent = 0);
     ~InvoicePage();
 
+    void setModel(MessageModel *model);
+
+public slots:
+    void exportClicked();
+
 private:
     Ui::InvoicePage *ui;
+    InvoiceTableModel *model;
+    QSortFilterProxyModel *proxyModel;
+    QMenu *contextMenu;
+    QAction *replyAction;
+    QAction *payAction;
+    QAction *resendAction;
+    QAction *copyFromAddressAction;
+    QAction *copyToAddressAction;
+    QAction *deleteAction;
+
+private slots:
+    void on_replyButton_clicked();
+    void on_copyFromAddressButton_clicked();
+    void on_copyToAddressButton_clicked();
+    void on_deleteButton_clicked();
+    void selectionChanged();
+    /** Spawn contextual menu (right mouse menu) for address book entry */
+    void contextualMenu(const QPoint &point);
+
+signals:
 };
 
 #endif // INVOICEPAGE_H
