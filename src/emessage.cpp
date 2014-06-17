@@ -1348,7 +1348,7 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
     if (pto->smsgData.nWakeCounter < 1)
     {
         pto->smsgData.lastMatched = 0;
-        pto->smsgData.nWakeCounter = 3 + GetRandInt(90);  // set to a random time between [3, 120] * 10 (SMSG_SEND_DELAY) seconds
+        pto->smsgData.nWakeCounter = 10 + GetRandInt(300);  // set to a random time between [10, 300] * SMSG_SEND_DELAY seconds
         
         if (fDebugSmsg)
             printf("SecureMsgSendData(): nWakeCounter expired, sending bucket inventory to %s.\n"
