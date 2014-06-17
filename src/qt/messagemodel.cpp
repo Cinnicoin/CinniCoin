@@ -19,7 +19,8 @@
 #include <QMenu>
 #include <QFont>
 #include <QColor>
-// DEBUG #include <QDebug>
+
+/// DEBUG #include <QDebug>
 
 const QString MessageModel::Sent = "Sent";
 const QString MessageModel::Received = "Received";
@@ -243,12 +244,52 @@ public:
         };
     }
 
+    void newInvoice(InvoiceTableEntry invoice)
+    {
+        addInvoiceEntry(invoice, false);
+    }
+
     void newInvoiceItem()
     {
         InvoiceItemTableEntry invoice(true);
-        invoice.vchKey.resize(3);
-        memcpy(&invoice.vchKey[0], "new", 3);
-        addInvoiceItemEntry(invoice, true);
+        addInvoiceItemEntry(invoice, false);
+    }
+
+    QString getInvoiceJSON(const int row)
+    {
+        QList<InvoiceTableEntry>::iterator inv;
+        json_spirit::Object invoice;
+
+        invoice.push_back(json_spirit::Pair("type", "invoice" ));
+        invoice.push_back(json_spirit::Pair("company_info_left",  cachedInvoiceTable.at(row).company_info_left.toStdString()));
+        invoice.push_back(json_spirit::Pair("company_info_right", cachedInvoiceTable[row].company_info_right.toStdString()));
+        invoice.push_back(json_spirit::Pair("billing_info_left",  cachedInvoiceTable[row].billing_info_left.toStdString()));
+        invoice.push_back(json_spirit::Pair("billing_info_right", cachedInvoiceTable[row].billing_info_right.toStdString()));
+        invoice.push_back(json_spirit::Pair("footer",             cachedInvoiceTable[row].footer.toStdString()));
+        invoice.push_back(json_spirit::Pair("invoice_number",     cachedInvoiceTable[row].invoice_number.toStdString()));
+        invoice.push_back(json_spirit::Pair("due_date",           cachedInvoiceTable[row].due_date.toString().toStdString()));
+
+        QList<InvoiceItemTableEntry>::iterator i;
+        json_spirit::Array items;
+
+        for (i = cachedInvoiceItemTable.begin(); i != cachedInvoiceItemTable.end(); ++i)
+            if(i->vchKey == cachedInvoiceTable[row].vchKey)
+            {
+                json_spirit::Object item;
+
+                item.push_back(json_spirit::Pair("code",         i->code.toStdString()));
+                item.push_back(json_spirit::Pair("description",  i->description.toStdString()));
+                item.push_back(json_spirit::Pair("price",        int64_t(i->price)));
+                //item.push_back(json_spirit::Pair("tax",  i->tax));
+                item.push_back(json_spirit::Pair("quantity",     i->quantity));
+
+                items.push_back(item);
+            }
+
+        invoice.push_back(json_spirit::Pair("items", items));
+
+        return QString::fromStdString(json_spirit::write(invoice));
+
     }
 
     MessageTableEntry *index(int idx)
@@ -682,9 +723,35 @@ InvoiceItemTableModel *InvoiceTableModel::getInvoiceItemTableModel()
     return invoiceItemTableModel;
 }
 
+void InvoiceTableModel::newInvoice(QString CompanyInfoLeft,
+                                   QString CompanyInfoRight,
+                                   QString BillingInfoLeft,
+                                   QString BillingInfoRight,
+                                   QString Footer,
+                                   QDate   DueDate,
+                                   QString InvoiceNumber)
+{
+    InvoiceTableEntry invoice(true);
+
+    invoice.company_info_left  = CompanyInfoLeft;
+    invoice.company_info_right = CompanyInfoRight;
+    invoice.billing_info_left  = BillingInfoLeft;
+    invoice.billing_info_right = BillingInfoRight;
+    invoice.footer             = Footer;
+    invoice.due_date           = DueDate;
+    invoice.invoice_number     = InvoiceNumber;
+
+    priv->newInvoice(invoice);
+}
+
 void InvoiceTableModel::newInvoiceItem()
 {
     priv->newInvoiceItem();
+}
+
+QString InvoiceTableModel::getInvoiceJSON(const int row)
+{
+    return priv->getInvoiceJSON(row);
 }
 
 int InvoiceTableModel::rowCount(const QModelIndex &parent) const
@@ -709,7 +776,6 @@ QVariant InvoiceTableModel::data(const QModelIndex &index, int role) const
 
     if(role != Qt::TextAlignmentRole)
          rec = static_cast<InvoiceTableEntry*>(index.internalPointer());
-
 
     switch(role)
     {
@@ -762,6 +828,56 @@ QVariant InvoiceTableModel::data(const QModelIndex &index, int role) const
 
     return QVariant();
 }
+
+/*
+bool InvoiceTableModel::setData(const QModelIndex & index, const QVariant & value, int role)
+{
+    if(!index.isValid())
+        return false;
+
+    qDebug() << value << index;
+    InvoiceTableEntry *rec = static_cast<InvoiceTableEntry*>(index.internalPointer());
+
+    //editStatus = OK;
+
+    if(role == Qt::EditRole)
+    {
+        qDebug() << value << index;
+
+        switch(index.column())
+        {
+            case InvoiceNumber:    rec->invoice_number     = value.toString(); break;
+            case DueDate:          rec->due_date           = value.toDate(); break;
+            case CompanyInfoLeft:  rec->company_info_left  = value.toString(); break;
+            case CompanyInfoRight: rec->company_info_right = value.toString(); break;
+            case BillingInfoLeft:  rec->billing_info_left  = value.toString(); break;
+            case BillingInfoRight: rec->billing_info_right = value.toString(); break;
+            case Footer:           rec->footer             = value.toString(); break;
+        }
+
+        return true;
+    }
+    return false;
+}
+
+void InvoiceTableModel::setData(const int row, const int col, const QVariant & value)
+{
+    InvoiceTableEntry rec = priv->cachedInvoiceTable.at(row);
+
+    qDebug() << value << col;
+
+    switch(col)
+    {
+        case InvoiceNumber:    rec.invoice_number     = value.toString(); break;
+        case DueDate:          rec.due_date           = value.toDate();   break;
+        case CompanyInfoLeft:  rec.company_info_left  = value.toString(); break;
+        case CompanyInfoRight: rec.company_info_right = value.toString(); break;
+        case BillingInfoLeft:  rec.billing_info_left  = value.toString(); break;
+        case BillingInfoRight: rec.billing_info_right = value.toString(); break;
+        case Footer:           rec.footer             = value.toString(); break;
+    }
+}
+*/
 
 QVariant InvoiceTableModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
@@ -890,6 +1006,37 @@ QVariant InvoiceItemTableModel::data(const QModelIndex &index, int role) const
     return QVariant();
 }
 
+bool InvoiceItemTableModel::setData(const QModelIndex & index, const QVariant & value, int role)
+{
+    if(!index.isValid())
+        return false;
+
+    InvoiceItemTableEntry *rec = static_cast<InvoiceItemTableEntry*>(index.internalPointer());
+
+    //editStatus = OK;
+
+
+    if(role == Qt::EditRole)
+    {
+        switch(index.column())
+        {
+            case Code:        rec->code        = value.toString(); break;
+            case Description: rec->description = value.toString(); break;
+            case Quantity:
+                rec->quantity    = value.toInt();
+                emitDataChanged(index.row());
+                break;
+            case Price:
+                BitcoinUnits::parse(priv->parent->getOptionsModel()->getDisplayUnit(), value.toString(), &rec->price);
+                emitDataChanged(index.row());
+                break;
+        }
+
+        return true;
+    }
+    return false;
+}
+
 QVariant InvoiceItemTableModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
     return (orientation == Qt::Horizontal && role == Qt::DisplayRole ? columns[section] : QVariant());
@@ -898,7 +1045,14 @@ QVariant InvoiceItemTableModel::headerData(int section, Qt::Orientation orientat
 Qt::ItemFlags InvoiceItemTableModel::flags(const QModelIndex & index) const
 {
     if(index.isValid())
-        return Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable;
+    {
+        Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
+
+        if(index.column() != Amount)
+            retval |= Qt::ItemIsEditable;
+
+        return retval;
+    }
 
     return 0;
 }
@@ -922,4 +1076,9 @@ bool InvoiceItemTableModel::removeRows(int row, int count, const QModelIndex & p
     endRemoveRows();
 
     return true;
+}
+
+void InvoiceItemTableModel::emitDataChanged(const int idx)
+{
+    emit dataChanged(index(idx, 0, QModelIndex()), index(idx, columns.length()-1, QModelIndex()));
 }

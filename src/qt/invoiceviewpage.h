@@ -33,10 +33,12 @@ private:
     Ui::InvoiceViewPage *ui;
     InvoiceTableModel *model;
     QSortFilterProxyModel *proxyModel;
+    QSortFilterProxyModel *invoiceProxyModel;
     QAction *sendAction;
 
 private slots:
     void on_sendButton_clicked();
+    void updateTotal();
 };
 
 #endif // INVOICEVIEWPAGE_H

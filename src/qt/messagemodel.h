@@ -143,13 +143,17 @@ struct InvoiceItemTableEntry
     QString code;
     QString description;
     int     quantity;
-    int64   price;
+    qint64  price;
     //bool    tax;
 
     InvoiceItemTableEntry(){};
     InvoiceItemTableEntry(const bool newInvoice):
-        vchKey(0), code(""), description(""), quantity(0), price(0){};
-    InvoiceItemTableEntry(const std::vector<unsigned char> vchKey, const QString &code, const QString &description, const int &quantity, const int64 &price): //, const bool &tax):
+        vchKey(0), code(""), description(""), quantity(0), price(0)
+    {
+        vchKey.resize(3);
+        memcpy(&vchKey[0], "new", 3);
+    };
+    InvoiceItemTableEntry(const std::vector<unsigned char> vchKey, const QString &code, const QString &description, const int &quantity, const qint64 &price): //, const bool &tax):
         vchKey(vchKey), code(code), description(description), quantity(quantity), price(price) {} //, tax(tax) {}
 };
 
@@ -172,6 +176,13 @@ struct InvoiceTableEntry
     QDate   due_date;
 
     InvoiceTableEntry() {}
+    InvoiceTableEntry(const bool newInvoice):
+        vchKey(0), type(MessageTableEntry::Sent), label(""), to_address(""), from_address(""), sent_datetime(), received_datetime(), company_info_left(""), company_info_right(""),
+        billing_info_left(""), billing_info_right(""), footer(""), invoice_number(""), due_date()
+    {
+        vchKey.resize(3);
+        memcpy(&vchKey[0], "new", 3);
+    };
     InvoiceTableEntry(const std::vector<unsigned char> vchKey, MessageTableEntry::Type type, const QString &label, const QString &to_address, const QString &from_address,
                       const QDateTime &sent_datetime, const QDateTime &received_datetime, const QString &company_info_left, const QString &company_info_right,
                       const QString &billing_info_left, const QString &billing_info_right, const QString &footer, const QString &invoice_number, const QDate &due_date):
@@ -224,6 +235,7 @@ public:
     int rowCount(const QModelIndex &parent) const;
     int columnCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
+    //bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent) const;
     bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
@@ -233,7 +245,20 @@ public:
     MessageModel *getMessageModel();
     InvoiceItemTableModel *getInvoiceItemTableModel();
 
+    void newInvoice(QString CompanyInfoLeft,
+                    QString CompanyInfoRight,
+                    QString BillingInfoLeft,
+                    QString BillingInfoRight,
+                    QString Footer,
+                    QDate   DueDate,
+                    QString InvoiceNumber);
+
     void newInvoiceItem();
+    //void setData(const int row, const int col, const QVariant & value);
+
+    QString getInvoiceJSON(const int row);
+
+    int lookupMessage(const QString &message) const;
 
 private:
     QStringList columns;
@@ -269,6 +294,7 @@ public:
     int rowCount(const QModelIndex &parent) const;
     int columnCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
+    bool setData(const QModelIndex & index, const QVariant & value, int role);
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent) const;
     bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
@@ -279,6 +305,9 @@ public:
 private:
     QStringList columns;
     MessageTablePriv *priv;
+
+    /** Notify listeners that data changed. */
+    void emitDataChanged(const int idx);
 
 public slots:
     friend class MessageTablePriv;

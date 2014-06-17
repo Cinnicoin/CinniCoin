@@ -35,6 +35,12 @@ void InvoiceViewPage::setModel(InvoiceTableModel *model)
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
 
+    invoiceProxyModel = new QSortFilterProxyModel(this);
+    invoiceProxyModel->setSourceModel(model);
+    invoiceProxyModel->setDynamicSortFilter(true);
+    invoiceProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
+    invoiceProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+
     ui->invoiceItemTableView->setModel(proxyModel);
 
     // Set column widths
@@ -50,6 +56,8 @@ void InvoiceViewPage::setModel(InvoiceTableModel *model)
     ui->taxLabel->setVisible(false);
     ui->subtotal->setVisible(false);
     ui->tax->setVisible(false);
+
+    connect(model->getInvoiceItemTableModel(), SIGNAL(dataChanged(QModelIndex,QModelIndex,QVector<int>)), this, SLOT(updateTotal()));
 
     //connect(ui->invoiceItemTableView->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)), this, SLOT(selectionChanged()));
 
@@ -89,16 +97,19 @@ void InvoiceViewPage::newInvoice()
     ui->total           ->setText(model->data(model->index(row, model->Total,            QModelIndex()), Qt::DisplayRole).toString());
     */
 
-    model->newInvoiceItem();
     proxyModel->setFilterRole(Qt::UserRole);
     proxyModel->setFilterFixedString("new");
 
-    //ui->invoiceItemTableView->set
+    invoiceProxyModel->setFilterRole(Qt::UserRole);
+    invoiceProxyModel->setFilterFixedString("new");
+
+    if(proxyModel->rowCount() == 0)
+    {
+        //model->newInvoice();
+        model->newInvoiceItem();
+    }
 
     ui->sendButton->setVisible(true);
-
-    //proxyModel->setFilterRole(Qt::DisplayRole);
-    //proxyModel->setFilterFixedString(model->data(model->index(row, model->Type, QModelIndex()), Qt::DisplayRole).toString());
 }
 
 void InvoiceViewPage::on_sendButton_clicked()
@@ -110,5 +121,23 @@ void InvoiceViewPage::on_sendButton_clicked()
 
     dlg.setModel(model->getMessageModel());
 
+    model->newInvoice(ui->companyInfoLeft->document()->toPlainText(),
+                      ui->companyInfoRight->document()->toPlainText(),
+                      ui->billingInfoLeft->document()->toPlainText(),
+                      ui->billingInfoRight->document()->toPlainText(),
+                      ui->footer->document()->toPlainText(),
+                      ui->dueDate->date(),
+                      ui->invoiceNumber->text());
+
+    dlg.loadInvoice(model->getInvoiceJSON(0));
+
     dlg.exec();
+}
+
+void InvoiceViewPage::updateTotal()
+{
+    if(!model)
+        return;
+
+    ui->total->setText(invoiceProxyModel->data(invoiceProxyModel->index(0, InvoiceTableModel::Total, QModelIndex()), Qt::DisplayRole).toString());
 }
