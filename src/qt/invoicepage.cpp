@@ -1,7 +1,9 @@
 #include "invoicepage.h"
 #include "ui_invoicepage.h"
 
+#include "bitcoinunits.h"
 #include "sendmessagesdialog.h"
+#include "invoiceviewpage.h"
 #include "messagemodel.h"
 #include "bitcoingui.h"
 #include "csvmodelwriter.h"
@@ -24,12 +26,13 @@ InvoicePage::InvoicePage(QWidget *parent) :
 #endif
 
     // Context menu actions
-    replyAction           = new QAction(ui->replyButton->text(),             this);
+    replyAction           = new QAction(ui->replyButton->text(),           this);
     payAction             = new QAction(ui->payButton->text(),             this);
     resendAction          = new QAction(ui->resendButton->text(),          this);
     copyFromAddressAction = new QAction(ui->copyFromAddressButton->text(), this);
     copyToAddressAction   = new QAction(ui->copyToAddressButton->text(),   this);
     deleteAction          = new QAction(ui->deleteButton->text(),          this);
+    //viewAction            = new QAction(tr("&View Invoice"),               this);
 
     // Build context menu
     contextMenu = new QMenu();
@@ -38,13 +41,17 @@ InvoicePage::InvoicePage(QWidget *parent) :
     contextMenu->addAction(copyFromAddressAction);
     contextMenu->addAction(copyToAddressAction);
     contextMenu->addAction(deleteAction);
+    //contextMenu->addAction(viewAction);
 
-    connect(payAction,             SIGNAL(triggered()), this, SLOT(on_replyButton_clicked()));
+    connect(payAction,             SIGNAL(triggered()), this, SLOT(on_payButton_clicked()));
     connect(resendAction,          SIGNAL(triggered()), this, SLOT(on_replyButton_clicked()));
     connect(replyAction,           SIGNAL(triggered()), this, SLOT(on_replyButton_clicked()));
     connect(copyFromAddressAction, SIGNAL(triggered()), this, SLOT(on_copyFromAddressButton_clicked()));
     connect(copyToAddressAction,   SIGNAL(triggered()), this, SLOT(on_copyToAddressButton_clicked()));
     connect(deleteAction,          SIGNAL(triggered()), this, SLOT(on_deleteButton_clicked()));
+
+    //connect(viewAction,            SIGNAL(triggered()), this, SLOT(on_doubleclick()));
+    connect(ui->tableView,         SIGNAL (doubleClicked(const QModelIndex&)), this, SLOT (viewInvoice(const QModelIndex&)));
 
     connect(ui->tableView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
 }
@@ -67,19 +74,30 @@ void InvoicePage::setModel(MessageModel *model)
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
 
     ui->tableView->setModel(proxyModel);
+
     ui->tableView->sortByColumn(2, Qt::DescendingOrder);
 
     // Set column widths
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::Type,             100);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::Label,            100);
-    ui->tableView->horizontalHeader()->setResizeMode(MessageModel::Label,            QHeaderView::Stretch);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::FromAddress,      320);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::ToAddress,        320);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::SentDateTime,     170);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::ReceivedDateTime, 170);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::Type,             100);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::Label,            100);
+    ui->tableView->horizontalHeader()->setResizeMode(InvoiceTableModel::Label,            QHeaderView::Stretch);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::FromAddress,      320);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::ToAddress,        320);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::SentDateTime,     170);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::ReceivedDateTime, 170);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::DueDate,          170);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::InvoiceNumber,    100);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::Total,            130);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::Paid,             130);
+    ui->tableView->horizontalHeader()->resizeSection(InvoiceTableModel::Outstanding,      150);
 
     // Hidden columns
-    ui->tableView->setColumnHidden(MessageModel::Message, true);
+    ui->tableView->setColumnHidden(InvoiceTableModel::CompanyInfoLeft,  true);
+    ui->tableView->setColumnHidden(InvoiceTableModel::CompanyInfoRight, true);
+    ui->tableView->setColumnHidden(InvoiceTableModel::BillingInfoLeft,  true);
+    ui->tableView->setColumnHidden(InvoiceTableModel::BillingInfoRight, true);
+    ui->tableView->setColumnHidden(InvoiceTableModel::Paid,             true);
+    ui->tableView->setColumnHidden(InvoiceTableModel::Outstanding,      true);
 
     connect(ui->tableView->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)),
             this, SLOT(selectionChanged()));
@@ -88,11 +106,40 @@ void InvoicePage::setModel(MessageModel *model)
 }
 
 
+void InvoicePage::on_newButton_clicked()
+{
+    InvoiceViewPage dlg(this);
+    dlg.setModel(model);
+    dlg.newInvoice();
+    dlg.exec();
+}
+
+void InvoicePage::on_payButton_clicked()
+{
+    if(!model)
+        return;
+
+    if(!ui->tableView->selectionModel())
+        return;
+
+    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows();
+
+    if(indexes.isEmpty())
+        return;
+
+    //SendCoinsDialog dlg(this);
+
+    //dlg.setModel(model->getMessageModel());
+    //QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
+    //dlg.loadRow(origIndex.row());
+    //dlg.exec();
+}
+
 void InvoicePage::on_replyButton_clicked()
 {
     if(!model)
         return;
-/*
+
     if(!ui->tableView->selectionModel())
         return;
 
@@ -103,12 +150,10 @@ void InvoicePage::on_replyButton_clicked()
 
     SendMessagesDialog dlg(SendMessagesDialog::Encrypted, SendMessagesDialog::Dialog, this);
 
-    dlg.setModel(model);
+    dlg.setModel(model->getMessageModel());
     QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
     dlg.loadRow(origIndex.row());
     dlg.exec();
-    */
-
 }
 
 void InvoicePage::on_copyFromAddressButton_clicked()
@@ -153,9 +198,20 @@ void InvoicePage::selectionChanged()
         ui->deleteButton->setEnabled(true);
 
         // Figure out which message was selected, and return it
-        QModelIndexList messageColumn = table->selectionModel()->selectedRows(MessageModel::Message);
-        QModelIndexList labelColumn   = table->selectionModel()->selectedRows(MessageModel::Label);
-        QModelIndexList typeColumn    = table->selectionModel()->selectedRows(MessageModel::Type);
+        QModelIndexList typeColumn = table->selectionModel()->selectedRows(InvoiceTableModel::Type);
+
+        foreach (QModelIndex index, typeColumn)
+        {
+            bool sent = (table->model()->data(index).toString() == MessageModel::Sent);
+
+            resendAction->setEnabled(sent);
+            ui->resendButton->setEnabled(sent);
+            ui->resendButton->setVisible(sent);
+
+            payAction->setEnabled(!sent);
+            ui->payButton->setEnabled(!sent);
+            ui->payButton->setVisible(!sent);
+        }
 
     }
     else
@@ -165,6 +221,27 @@ void InvoicePage::selectionChanged()
         ui->copyToAddressButton->setEnabled(false);
         ui->deleteButton->setEnabled(false);
     }
+}
+
+void InvoicePage::viewInvoice(const QModelIndex & index)
+{
+    if(!model)
+        return;
+
+    if(!ui->tableView->selectionModel())
+        return;
+
+    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows();
+
+    if(indexes.isEmpty())
+        return;
+
+    InvoiceViewPage dlg(this);
+
+    dlg.setModel(model);
+    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
+    dlg.loadRow(origIndex.row());
+    dlg.exec();
 }
 
 void InvoicePage::exportClicked()

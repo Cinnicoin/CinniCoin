@@ -26,11 +26,13 @@ public:
         ProxyPort,         // int
         ProxySocksVersion, // int
         Fee,               // qint64
+        ReserveBalance,    // qint64
         DisplayUnit,       // BitcoinUnits::Unit
         DisplayAddresses,  // bool
         DetachDatabases,   // bool
         Language,          // QString
         CoinControlFeatures, // bool
+        EnableMessageSendConf, // bool
         EnableTrollbox, // bool
         TrollName, // QString
         OptionIDRowCount,
@@ -53,6 +55,7 @@ public:
     bool getDisplayAddresses();
     QString getLanguage() { return language; }
     bool getCoinControlFeatures();
+    bool getEnableMessageSendConf();
     bool getEnableTrollbox();
     QString getTrollName() { return trollname; }
 
@@ -63,13 +66,16 @@ private:
     bool fMinimizeOnClose;
     QString language;
     bool fCoinControlFeatures;
+    bool fEnableMessageSendConf;
     bool fEnableTrollbox;
     QString trollname;
 
 signals:
     void displayUnitChanged(int unit);
     void transactionFeeChanged(qint64);
+    void reserveBalanceChanged(qint64);
     void coinControlFeaturesChanged(bool);
+    void enableMessageSendConfChanged(bool);
     void enableTrollboxChanged(bool);
     void trollNameChanged(QString);
 };

@@ -7,17 +7,10 @@
 #include "ui_interface.h"
 
 #include <QSet>
-#include <QTimer>
 
 IRCModel::IRCModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel)
 {
-    /*
-    // This timer will be fired repeatedly to check for messages
-    pollTimer = new QTimer(this);
-    connect(pollTimer, SIGNAL(timeout()), this, SLOT(pollMessages()));
-    pollTimer->start(MODEL_UPDATE_DELAY);
-    */
     isConnected = false;
     subscribeToCoreSignals();
 }

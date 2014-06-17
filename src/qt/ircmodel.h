@@ -26,7 +26,6 @@ public:
 
 private:
     OptionsModel *optionsModel;
-    //QTimer *pollTimer;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -34,17 +33,13 @@ private:
 
 public slots:
     void ircReceiveMessage(QString message);
-    /* Check for new messages */
-    //void pollMessages();
 
 signals:
     // Receive IRC Message
     void ircMessageReceived(QString message);
-    //void NotifyIRCMessage();
 
     // Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);
 };
-
 
 #endif // IRCMODEL_H

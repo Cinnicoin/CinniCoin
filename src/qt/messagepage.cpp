@@ -13,7 +13,7 @@
 #include <QMenu>
 
 MessagePage::MessagePage(QWidget *parent) :
-    QDialog(parent),
+    QWidget(parent),
     ui(new Ui::MessagePage),
     model(0)
 {
@@ -67,12 +67,15 @@ void MessagePage::setModel(MessageModel *model)
 
     // Set column widths
     ui->tableView->horizontalHeader()->resizeSection(MessageModel::Type,             100);
+    ui->tableView->horizontalHeader()->resizeSection(MessageModel::Label,            100);
     ui->tableView->horizontalHeader()->setResizeMode(MessageModel::Label,            QHeaderView::Stretch);
     ui->tableView->horizontalHeader()->resizeSection(MessageModel::FromAddress,      320);
     ui->tableView->horizontalHeader()->resizeSection(MessageModel::ToAddress,        320);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::SentDateTime,     160);
-    ui->tableView->horizontalHeader()->resizeSection(MessageModel::ReceivedDateTime, 160);
-    ui->tableView->horizontalHeader()->setResizeMode(MessageModel::Message,          QHeaderView::Stretch);
+    ui->tableView->horizontalHeader()->resizeSection(MessageModel::SentDateTime,     170);
+    ui->tableView->horizontalHeader()->resizeSection(MessageModel::ReceivedDateTime, 170);
+
+    // Hidden columns
+    ui->tableView->setColumnHidden(MessageModel::Message, true);
 
     connect(ui->tableView->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)),
             this, SLOT(selectionChanged()));
@@ -174,31 +177,6 @@ void MessagePage::selectionChanged()
         ui->messageDetails->hide();
         ui->message->clear();
     }
-}
-
-void MessagePage::done(int retval)
-{
-    QTableView *table = ui->tableView;
-    if(!table->selectionModel() || !table->model())
-        return;
-    // When this is a tab/widget and not a model dialog, ignore "done"
-
-    // Figure out which address was selected, and return it
-    QModelIndexList indexes = table->selectionModel()->selectedRows(MessageModel::ToAddress);
-
-    foreach (QModelIndex index, indexes)
-    {
-        QVariant address = table->model()->data(index);
-        returnValue = address.toString();
-    }
-
-    if(returnValue.isEmpty())
-    {
-        // If no address entry selected, return rejected
-        retval = Rejected;
-    }
-
-    QDialog::done(retval);
 }
 
 void MessagePage::exportClicked()

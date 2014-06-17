@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>574</width>
+    <width>705</width>
     <height>572</height>
    </rect>
   </property>
@@ -180,21 +180,21 @@
      <item>
       <layout class="QGridLayout" name="gridLayout">
        <item row="0" column="0">
-        <widget class="QLabel" name="label_6">
+        <widget class="QLabel" name="subtotalLabel">
          <property name="text">
           <string>Sub Total:</string>
          </property>
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="label_7">
+        <widget class="QLabel" name="taxLabel">
          <property name="text">
           <string>Tax:</string>
          </property>
         </widget>
        </item>
        <item row="2" column="0">
-        <widget class="QLabel" name="label_8">
+        <widget class="QLabel" name="totalLabel">
          <property name="text">
           <string>Total:</string>
          </property>
@@ -203,7 +203,7 @@
        <item row="0" column="1">
         <widget class="QLabel" name="subtotal">
          <property name="text">
-          <string>0.00</string>
+          <string/>
          </property>
         </widget>
        </item>
@@ -265,10 +265,22 @@
      </item>
     </layout>
    </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_7">
+     <item>
+      <widget class="QPushButton" name="sendButton">
+       <property name="text">
+        <string>&amp;Send</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
   </layout>
   <zorder>invoiceItemTableView</zorder>
   <zorder>label_3</zorder>
   <zorder></zorder>
+  <zorder>horizontalLayoutWidget</zorder>
  </widget>
  <resources>
   <include location="../bitcoin.qrc"/>

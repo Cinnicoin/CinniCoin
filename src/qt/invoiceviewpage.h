@@ -26,11 +26,17 @@ public:
     ~InvoiceViewPage();
 
     void setModel(InvoiceTableModel *model);
+    void loadRow(int row);
+    void newInvoice();
 
 private:
     Ui::InvoiceViewPage *ui;
-    InvoiceItemTableModel *model;
+    InvoiceTableModel *model;
     QSortFilterProxyModel *proxyModel;
+    QAction *sendAction;
+
+private slots:
+    void on_sendButton_clicked();
 };
 
 #endif // INVOICEVIEWPAGE_H

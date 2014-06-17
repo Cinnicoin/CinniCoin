@@ -45,13 +45,18 @@ private:
     QAction *copyFromAddressAction;
     QAction *copyToAddressAction;
     QAction *deleteAction;
+    QAction *viewAction;
 
 private slots:
+    void on_newButton_clicked();
+    void on_payButton_clicked();
     void on_replyButton_clicked();
     void on_copyFromAddressButton_clicked();
     void on_copyToAddressButton_clicked();
     void on_deleteButton_clicked();
     void selectionChanged();
+    void viewInvoice(const QModelIndex & index);
+
     /** Spawn contextual menu (right mouse menu) for address book entry */
     void contextualMenu(const QPoint &point);
 

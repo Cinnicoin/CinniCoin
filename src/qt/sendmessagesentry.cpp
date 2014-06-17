@@ -109,6 +109,11 @@ void SendMessagesEntry::loadRow(int row)
         ui->sendTo->setText(model->data(model->index(row, model->ToAddress, QModelIndex()), Qt::DisplayRole).toString());
 }
 
+void SendMessagesEntry::loadInvoice(QString message)
+{
+    ui->messageText->setPlainText(message);
+}
+
 void SendMessagesEntry::setRemoveEnabled(bool enabled)
 {
     ui->deleteButton->setEnabled(enabled);

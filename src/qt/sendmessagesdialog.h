@@ -38,6 +38,7 @@ public:
 
     void setModel (MessageModel *model);
     void loadRow(int row);
+    void loadInvoice(QString message);
     bool checkMode(Mode mode);
     bool validate ();
 
@@ -60,8 +61,10 @@ private:
     bool fNewRecipientAllowed;
     Mode mode;
     Type type;
+    bool fEnableSendMessageConf;
 
 private slots:
+    void enableSendMessageConf(bool enabled);
     void on_sendButton_clicked();
     void removeEntry(SendMessagesEntry* entry);
     void on_addressBookButton_clicked();

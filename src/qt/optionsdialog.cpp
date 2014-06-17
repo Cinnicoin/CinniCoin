@@ -129,6 +129,7 @@ void OptionsDialog::setMapper()
 {
     /* Main */
     mapper->addMapping(ui->transactionFee, OptionsModel::Fee);
+    mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->bitcoinAtStartup, OptionsModel::StartAtStartup);
     mapper->addMapping(ui->detachDatabases, OptionsModel::DetachDatabases);
 
@@ -152,7 +153,8 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
     mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
 
-    //Trollbox
+    //Communications
+    mapper->addMapping(ui->enableMessageSendConf, OptionsModel::EnableMessageSendConf);
     mapper->addMapping(ui->enableTrollbox, OptionsModel::EnableTrollbox);
     mapper->addMapping(ui->trollNameEdit, OptionsModel::TrollName);
 }

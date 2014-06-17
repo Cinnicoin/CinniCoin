@@ -48,7 +48,8 @@ void OptionsModel::Init()
     nTransactionFee = settings.value("nTransactionFee").toLongLong();
     language = settings.value("language", "").toString();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
-    fEnableTrollbox = settings.value("fEnableTrollbox", true).toBool();
+    fEnableMessageSendConf = settings.value("fEnableMessageSendConf", true).toBool();
+    fEnableTrollbox = settings.value("fEnableTrollbox", false).toBool();
     trollname = settings.value("trollname", "").toString();
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
@@ -163,7 +164,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case ProxySocksVersion:
             return settings.value("nSocksVersion", 5);
         case Fee:
-            return QVariant(nTransactionFee);
+            return QVariant((qint64) nTransactionFee);
         case DisplayUnit:
             return QVariant(nDisplayUnit);
         case DisplayAddresses:
@@ -174,6 +175,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("language", "");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
+        case EnableMessageSendConf:
+            return QVariant(fEnableMessageSendConf);
         case EnableTrollbox:
             return QVariant(fEnableTrollbox);
         case TrollName:
@@ -246,7 +249,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         break;
         case Fee:
             nTransactionFee = value.toLongLong();
-            settings.setValue("nTransactionFee", nTransactionFee);
+            settings.setValue("nTransactionFee", (qint64) nTransactionFee);
             emit transactionFeeChanged(nTransactionFee);
             break;
         case DisplayUnit:
@@ -273,6 +276,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
              emit coinControlFeaturesChanged(fCoinControlFeatures);
              }
              break;
+        case EnableMessageSendConf: {
+             fEnableMessageSendConf = value.toBool();
+             settings.setValue("fEnableMessageSendConf", fEnableMessageSendConf);
+             emit enableMessageSendConfChanged(fEnableMessageSendConf);
+             }
+             break;
         case EnableTrollbox: {
              fEnableTrollbox = value.toBool();
              settings.setValue("fEnableTrollbox", fEnableTrollbox);
@@ -297,14 +306,22 @@ qint64 OptionsModel::getTransactionFee()
 {
     return nTransactionFee;
 }
+
 bool OptionsModel::getCoinControlFeatures()
- {
-     return fCoinControlFeatures;
- }
+{
+    return fCoinControlFeatures;
+}
+
+bool OptionsModel::getEnableMessageSendConf()
+{
+    return fEnableMessageSendConf;
+}
+
 bool OptionsModel::getEnableTrollbox()
- {
-     return fEnableTrollbox;
- }
+{
+    return fEnableTrollbox;
+}
+
 bool OptionsModel::getMinimizeToTray()
 {
     return fMinimizeToTray;

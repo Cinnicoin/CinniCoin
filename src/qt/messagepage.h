@@ -1,7 +1,7 @@
 #ifndef MESSAGEPAGE_H
 #define MESSAGEPAGE_H
 
-#include <QDialog>
+#include <QWidget>
 
 namespace Ui {
     class MessagePage;
@@ -20,7 +20,7 @@ QT_END_NAMESPACE
 
 /** Widget that shows a list of sending or receiving addresses.
   */
-class MessagePage : public QDialog
+class MessagePage : public QWidget
 {
     Q_OBJECT
 
@@ -30,16 +30,13 @@ public:
     ~MessagePage();
 
     void setModel(MessageModel *model);
-    const QString &getReturnValue() const { return returnValue; }
 
 public slots:
-    void done(int retval);
     void exportClicked();
 
 private:
     Ui::MessagePage *ui;
     MessageModel *model;
-    QString returnValue;
     QSortFilterProxyModel *proxyModel;
     QMenu *contextMenu;
     QAction *replyAction;

@@ -55,6 +55,14 @@ void SendMessagesDialog::setModel(MessageModel *model)
 {
     this->model = model;
 
+    if(model)
+    {
+        // Get IRC Messages
+        connect(model->getOptionsModel(), SIGNAL(enableMessageSendConfChanged(bool)), this, SLOT(enableSendMessageConf(bool)));
+
+        enableSendMessageConf(model->getOptionsModel()->getEnableMessageSendConf());
+    }
+
     for(int i = 0; i < ui->entries->count(); ++i)
     {
         SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
@@ -80,6 +88,17 @@ void SendMessagesDialog::loadRow(int row)
     }
 }
 
+void SendMessagesDialog::loadInvoice(QString message)
+{
+    for(int i = 0; i < ui->entries->count(); ++i)
+    {
+        SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
+
+        if(entry)
+            entry->loadInvoice(message);
+    }
+}
+
 bool SendMessagesDialog::checkMode(Mode mode)
 {
     return (mode == this->mode);
@@ -100,6 +119,11 @@ bool SendMessagesDialog::validate()
 SendMessagesDialog::~SendMessagesDialog()
 {
     delete ui;
+}
+
+void SendMessagesDialog::enableSendMessageConf(bool enabled = true)
+{
+    fEnableSendMessageConf = enabled;
 }
 
 void SendMessagesDialog::on_pasteButton_clicked()
@@ -160,15 +184,18 @@ void SendMessagesDialog::on_sendButton_clicked()
 
     fNewRecipientAllowed = false;
 
-    QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm send messages"),
-                          tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and "))),
-          QMessageBox::Yes|QMessageBox::Cancel,
-          QMessageBox::Cancel);
-
-    if(retval != QMessageBox::Yes)
+    if(fEnableSendMessageConf)
     {
-        fNewRecipientAllowed = true;
-        return;
+        QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm send messages"),
+                              tr("Are you sure you want to send %1?").arg(formatted.join(tr(" and "))),
+              QMessageBox::Yes|QMessageBox::Cancel,
+              QMessageBox::Cancel);
+
+        if(retval != QMessageBox::Yes)
+        {
+            fNewRecipientAllowed = true;
+            return;
+        }
     }
 
     MessageModel::StatusCode sendstatus;

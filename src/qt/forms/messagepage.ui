@@ -33,7 +33,7 @@
       <enum>Qt::CustomContextMenu</enum>
      </property>
      <property name="toolTip">
-      <string>Double-click to edit address or label</string>
+      <string>Click on a message to view it</string>
      </property>
      <property name="tabKeyNavigation">
       <bool>false</bool>
