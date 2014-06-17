@@ -261,7 +261,7 @@ public:
         json_spirit::Object invoice;
 
         invoice.push_back(json_spirit::Pair("type", "invoice" ));
-        invoice.push_back(json_spirit::Pair("company_info_left",  cachedInvoiceTable.at(row).company_info_left.toStdString()));
+        invoice.push_back(json_spirit::Pair("company_info_left",  cachedInvoiceTable[row].company_info_left.toStdString()));
         invoice.push_back(json_spirit::Pair("company_info_right", cachedInvoiceTable[row].company_info_right.toStdString()));
         invoice.push_back(json_spirit::Pair("billing_info_left",  cachedInvoiceTable[row].billing_info_left.toStdString()));
         invoice.push_back(json_spirit::Pair("billing_info_right", cachedInvoiceTable[row].billing_info_right.toStdString()));
@@ -269,27 +269,33 @@ public:
         invoice.push_back(json_spirit::Pair("invoice_number",     cachedInvoiceTable[row].invoice_number.toStdString()));
         invoice.push_back(json_spirit::Pair("due_date",           cachedInvoiceTable[row].due_date.toString().toStdString()));
 
-        QList<InvoiceItemTableEntry>::iterator i;
         json_spirit::Array items;
 
-        for (i = cachedInvoiceItemTable.begin(); i != cachedInvoiceItemTable.end(); ++i)
-            if(i->vchKey == cachedInvoiceTable[row].vchKey)
+        for(int i = 0;i<cachedInvoiceItemTable.size();i++)
+            if(cachedInvoiceItemTable[i].vchKey == cachedInvoiceTable[row].vchKey)
             {
                 json_spirit::Object item;
 
-                item.push_back(json_spirit::Pair("code",         i->code.toStdString()));
-                item.push_back(json_spirit::Pair("description",  i->description.toStdString()));
-                item.push_back(json_spirit::Pair("price",        int64_t(i->price)));
+                item.push_back(json_spirit::Pair("code",         cachedInvoiceItemTable[i].code.toStdString()));
+                item.push_back(json_spirit::Pair("description",  cachedInvoiceItemTable[i].description.toStdString()));
+                item.push_back(json_spirit::Pair("price",        int64_t(cachedInvoiceItemTable[i].price)));
                 //item.push_back(json_spirit::Pair("tax",  i->tax));
-                item.push_back(json_spirit::Pair("quantity",     i->quantity));
+                item.push_back(json_spirit::Pair("quantity",     cachedInvoiceItemTable[i].quantity));
 
                 items.push_back(item);
+
+                parent->getInvoiceTableModel()->getInvoiceItemTableModel()->beginRemoveRows(QModelIndex(), 0, 0);
+                cachedInvoiceItemTable.removeAt(i);
+                parent->getInvoiceTableModel()->getInvoiceItemTableModel()->endRemoveRows();
             }
 
         invoice.push_back(json_spirit::Pair("items", items));
 
-        return QString::fromStdString(json_spirit::write(invoice));
+        parent->getInvoiceTableModel()->beginRemoveRows(QModelIndex(), 0, 0);
+        cachedInvoiceTable.removeAt(row);
+        parent->getInvoiceTableModel()->endRemoveRows();
 
+        return QString::fromStdString(json_spirit::write(invoice));
     }
 
     MessageTableEntry *index(int idx)
@@ -822,8 +828,19 @@ QVariant InvoiceTableModel::data(const QModelIndex &index, int role) const
                 default: break;
             }
             break;
+
         case Qt::UserRole:
-            return QString((char*)&rec->vchKey[0]);
+            switch(index.column())
+            {
+            case Type:
+                switch(rec->type)
+                {
+                    case MessageTableEntry::Sent:     return MessageModel::Sent;
+                    case MessageTableEntry::Received: return MessageModel::Received;
+                }
+            default:
+                return QString((char*)&rec->vchKey[0]);
+            }
     }
 
     return QVariant();
@@ -999,6 +1016,7 @@ QVariant InvoiceItemTableModel::data(const QModelIndex &index, int role) const
                 default: break;
             }
             break;
+
         case Qt::UserRole:
             return QString((char*)&rec->vchKey[0]);
     }

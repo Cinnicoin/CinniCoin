@@ -76,12 +76,9 @@ void InvoiceViewPage::loadRow(int row)
     ui->total           ->setText(model->data(model->index(row, model->Total,            QModelIndex()), Qt::DisplayRole).toString());
 
     proxyModel->setFilterRole(Qt::UserRole);
-    proxyModel->setFilterFixedString(model->data(model->index(row, model->Type, QModelIndex()), Qt::UserRole).toString());
+    proxyModel->setFilterFixedString(model->data(model->index(row, 999, QModelIndex()), Qt::UserRole).toString());
 
     ui->sendButton->setVisible(false);
-
-    //proxyModel->setFilterRole(Qt::DisplayRole);
-    //proxyModel->setFilterFixedString(model->data(model->index(row, model->Type, QModelIndex()), Qt::DisplayRole).toString());
 }
 
 void InvoiceViewPage::newInvoice()
@@ -100,12 +97,8 @@ void InvoiceViewPage::newInvoice()
     proxyModel->setFilterRole(Qt::UserRole);
     proxyModel->setFilterFixedString("new");
 
-    invoiceProxyModel->setFilterRole(Qt::UserRole);
-    invoiceProxyModel->setFilterFixedString("new");
-
     if(proxyModel->rowCount() == 0)
     {
-        //model->newInvoice();
         model->newInvoiceItem();
     }
 
@@ -132,6 +125,8 @@ void InvoiceViewPage::on_sendButton_clicked()
     dlg.loadInvoice(model->getInvoiceJSON(0));
 
     dlg.exec();
+
+    done(0);
 }
 
 void InvoiceViewPage::updateTotal()

@@ -273,7 +273,8 @@ void BitcoinGUI::createActions()
 
     invoiceAction = new QAction(QIcon(":/icons/em"), tr("&Invoices"), this);
     invoiceAction->setToolTip(tr("Encrypted Invoicing"));
-    invoiceAction->setCheckable(true);
+    invoiceAction->setCheckable(false); // TODO: Remove once Anonymous messaging and transactions have been implemented
+    invoiceAction->setEnabled(false);  // TODO: Remove once Anonymous messaging and transactions have been implemented
     invoiceAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_7));
     tabGroup->addAction(invoiceAction);
 
