@@ -54,7 +54,6 @@ Value smsgdisable(const Array& params, bool fHelp)
     if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is already disabled.");
     
-    
     Object result;
     if (!SecureMsgDisable())
     {
@@ -223,7 +222,6 @@ Value smsglistlocalkeys(const Array& params, bool fHelp)
         if (!IsMine(*pwalletMain, entry.first))
             continue;
         
-        
         CBitcoinAddress coinAddress(entry.first);
         if (!coinAddress.IsValid())
             continue;
@@ -322,6 +320,9 @@ Value smsginbox(const Array& params, bool fHelp)
     
     if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
+    
+    if (pwalletMain->IsLocked())
+        throw runtime_error("Wallet is locked.");
     
     std::string mode = "unread";
     if (params.size() > 0)
@@ -555,6 +556,9 @@ Value smsgoutbox(const Array& params, bool fHelp)
     
     if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
+    
+    if (pwalletMain->IsLocked())
+        throw runtime_error("Wallet is locked.");
     
     std::string mode = "all";
     if (params.size() > 0)

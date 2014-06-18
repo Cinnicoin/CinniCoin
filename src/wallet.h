@@ -18,6 +18,8 @@
 #include "util.h"
 #include "walletdb.h"
 
+#include "emessage.h"
+
 extern bool fWalletUnlockMintOnly;
 class CAccountingEntry;
 class CWalletTx;

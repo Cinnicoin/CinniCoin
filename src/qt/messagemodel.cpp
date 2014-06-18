@@ -57,6 +57,12 @@ public:
         cachedInvoiceTable.clear();
         cachedInvoiceItemTable.clear();
         
+        if (parent->getWalletModel()->getEncryptionStatus() == WalletModel::Locked)
+        {
+            // -- messages are stored encrypted, can't load them without the private keys
+            return;
+        };
+        
         Dbt datKey;
         Dbt datValue;
 
@@ -168,6 +174,7 @@ public:
 
             pcursor->close();
         }
+        
     }
 
     void newMessage(const SecInboxMsg& inboxHdr)
@@ -243,6 +250,26 @@ public:
                                false);
         };
     }
+    
+    void walletUnlocked()
+    {
+        // -- wallet is unlocked, can get at the private keys now
+        refreshMessageTable();
+        parent->reset(); // reload table view
+        //invalidateFilter()
+    }
+    
+    void setEncryptionStatus(int status)
+    {
+        if (status == WalletModel::Locked)
+        {
+            // -- Wallet is locked, clear secure message display.
+            cachedMessageTable.clear();
+            cachedInvoiceTable.clear();
+            cachedInvoiceItemTable.clear();
+            parent->reset(); // reload table view
+        };
+    };
 
     void newInvoice(InvoiceTableEntry invoice)
     {
@@ -409,8 +436,10 @@ private:
 
     void addMessageEntry(const MessageTableEntry & message, const bool & append)
     {
-        if(append) cachedMessageTable.append(message);
-        else
+        if(append)
+        {
+            cachedMessageTable.append(message);
+        } else
         {
             int index = qLowerBound(cachedMessageTable.begin(), cachedMessageTable.end(), message.received_datetime, MessageTableEntryLessThan()) - cachedMessageTable.begin();
             parent->beginInsertRows(QModelIndex(), index, index);
@@ -539,8 +568,8 @@ MessageModel::StatusCode MessageModel::sendMessages(const QList<SendMessagesReci
             QMessageBox::warning(NULL, tr("Send Secure Message"),
                 tr("Send failed: %1.").arg(sError.c_str()),
                 QMessageBox::Ok, QMessageBox::Ok);
-
-            return InvalidAddress;
+            
+            return FailedErrorShown;
         };
 
         // Add addresses / update labels that we've sent to to the address book
@@ -592,8 +621,8 @@ QVariant MessageModel::data(const QModelIndex &index, int role) const
 
     if(role == Qt::DisplayRole)
     {
-	    switch(index.column())
-	    {
+        switch(index.column())
+        {
             case Label:	           return (rec->label.isEmpty() ? tr("(no label)") : rec->label);
             case ToAddress:	       return rec->to_address;
             case FromAddress:      return rec->from_address;
@@ -608,7 +637,7 @@ QVariant MessageModel::data(const QModelIndex &index, int role) const
                     case MessageTableEntry::Received: return Received;
                     default: break;
                 }
-	    }
+        }
     }
 
     return QVariant();
@@ -672,6 +701,16 @@ void MessageModel::newOutboxMessage(const SecOutboxMsg &smsgOutbox)
     priv->newOutboxMessage(smsgOutbox);
 }
 
+void MessageModel::walletUnlocked()
+{
+    priv->walletUnlocked();
+}
+
+void MessageModel::setEncryptionStatus(int status)
+{
+    priv->setEncryptionStatus(status);
+}
+
 
 static void NotifySecMsgInbox(MessageModel *messageModel, SecInboxMsg inboxHdr)
 {
@@ -686,6 +725,11 @@ static void NotifySecMsgOutbox(MessageModel *messageModel, SecOutboxMsg outboxHd
                               Q_ARG(SecOutboxMsg, outboxHdr));
 }
 
+static void NotifySecMsgWallet(MessageModel *messageModel)
+{
+    QMetaObject::invokeMethod(messageModel, "walletUnlocked", Qt::QueuedConnection);
+}
+
 void MessageModel::subscribeToCoreSignals()
 {
     qRegisterMetaType<SecInboxMsg>("SecInboxMsg");
@@ -694,6 +738,9 @@ void MessageModel::subscribeToCoreSignals()
     // Connect signals
     NotifySecMsgInboxChanged.connect(boost::bind(NotifySecMsgInbox, this, _1));
     NotifySecMsgOutboxChanged.connect(boost::bind(NotifySecMsgOutbox, this, _1));
+    NotifySecMsgWalletUnlocked.connect(boost::bind(NotifySecMsgWallet, this));
+    
+    connect(walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setEncryptionStatus(int)));
 }
 
 void MessageModel::unsubscribeFromCoreSignals()
@@ -701,6 +748,9 @@ void MessageModel::unsubscribeFromCoreSignals()
     // Disconnect signals
     NotifySecMsgInboxChanged.disconnect(boost::bind(NotifySecMsgInbox, this, _1));
     NotifySecMsgOutboxChanged.disconnect(boost::bind(NotifySecMsgOutbox, this, _1));
+    NotifySecMsgWalletUnlocked.disconnect(boost::bind(NotifySecMsgWallet, this));
+    
+    disconnect(walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setEncryptionStatus(int)));
 }
 
 

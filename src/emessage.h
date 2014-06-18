@@ -41,6 +41,13 @@ extern boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxCh
 class SecOutboxMsg;
 extern boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutboxChanged;
 
+/** Wallet Unlocked
+ * @note called after all messages received while locked have been processed.
+ */
+extern boost::signals2::signal<void ()> NotifySecMsgWalletUnlocked;
+
+
+
 extern std::map<int64_t, SecMsgBucket> smsgSets;
 extern CCriticalSection cs_smsg;            // all except inbox and outbox
 extern CCriticalSection cs_smsgInbox;
@@ -310,7 +317,10 @@ bool SecureMsgScanBlock(CBlock& block);
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart);
 bool SecureMsgScanBlockChain();
 
-int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
+
+int SecureMsgWalletUnlocked();
+
+int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool reportToGui);
 
 int SecureMsgGetStoredKey(CKeyID& ckid, CPubKey& cpkOut);
 int SecureMsgGetLocalKey(CKeyID& ckid, CPubKey& cpkOut);
@@ -322,6 +332,7 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData);
 
 int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData);
 
+int SecureMsgStoreUnscanned(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload);
 int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool fUpdateBucket);
 int SecureMsgStore(SecureMessage& smsg, bool fUpdateBucket);
 

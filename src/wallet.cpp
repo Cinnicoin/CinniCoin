@@ -105,7 +105,10 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
+            {
+                SecureMsgWalletUnlocked();
                 return true;
+            }
         }
     }
     return false;
@@ -655,12 +658,12 @@ void CWalletTx::GetAmounts(int64& nGeneratedImmature, int64& nGeneratedMature, l
         vector<unsigned char> vchPubKey;
         if (!ExtractDestination(txout.scriptPubKey, address))
         {
-			if(!IsCoinBase() ||!IsCoinStake())
-			{
-				printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+            if(!IsCoinBase() ||!IsCoinStake())
+            {
+                printf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
                    this->GetHash().ToString().c_str());
-			}
-			continue;
+            }
+            continue;
         }
 
         // Don't report 'change' txouts
@@ -671,17 +674,17 @@ void CWalletTx::GetAmounts(int64& nGeneratedImmature, int64& nGeneratedMature, l
             listSent.push_back(make_pair(address, txout.nValue));
 
         if (pwallet->IsMine(txout))
-		{
-			if(IsCoinBase() || IsCoinStake())
-			{
-				if(GetBlocksToMaturity() > 0)
-					nGeneratedImmature += txout.nValue;
-				else
-					nGeneratedMature += txout.nValue;
-			}
-			else
-				listReceived.push_back(make_pair(address, txout.nValue));
-		}
+        {
+            if(IsCoinBase() || IsCoinStake())
+            {
+                if(GetBlocksToMaturity() > 0)
+                    nGeneratedImmature += txout.nValue;
+                else
+                    nGeneratedMature += txout.nValue;
+            }
+            else
+                listReceived.push_back(make_pair(address, txout.nValue));
+        }
     }
 
 }
@@ -704,7 +707,7 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, int64& nGenerated, i
         BOOST_FOREACH(const PAIRTYPE(CTxDestination,int64)& s, listSent)
             nSent += s.second;
         nFee = allFee;
-		nGenerated = allGeneratedMature;
+        nGenerated = allGeneratedMature;
     }
 
     {

@@ -68,7 +68,8 @@ public:
         DuplicateAddress,
         MessageCreationFailed, // Error returned when DB is still locked
         MessageCommitFailed,
-        Aborted
+        Aborted,
+        FailedErrorShown
     };
 
     enum ColumnIndex {
@@ -127,6 +128,10 @@ public slots:
     /* Check for new messages */
     void newMessage(const SecInboxMsg& smsgInbox);
     void newOutboxMessage(const SecOutboxMsg& smsgOutbox);
+    
+    void walletUnlocked();
+    
+    void setEncryptionStatus(int status);
 
     friend class MessageTablePriv;
 

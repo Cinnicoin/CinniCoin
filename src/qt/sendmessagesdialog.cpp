@@ -232,7 +232,9 @@ void SendMessagesDialog::on_sendButton_clicked()
             tr("Error: The message was rejected."),
             QMessageBox::Ok, QMessageBox::Ok);
         break;
-    case MessageModel::Aborted: // User aborted, nothing to do
+    case MessageModel::Aborted:             // User aborted, nothing to do
+        break;
+    case MessageModel::FailedErrorShown:    // Send failed, error message was displayed
         break;
     case MessageModel::OK:
         accept();

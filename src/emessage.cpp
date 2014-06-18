@@ -33,6 +33,7 @@ Notes:
 #include <openssl/hmac.h>
 
 #include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 
 #include "base58.h"
@@ -62,6 +63,7 @@ Notes:
 
 boost::signals2::signal<void (SecInboxMsg& inboxHdr)> NotifySecMsgInboxChanged;
 boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutboxChanged;
+boost::signals2::signal<void ()> NotifySecMsgWalletUnlocked;
 
 bool fSecMsgEnabled = false;
 
@@ -69,7 +71,7 @@ std::map<int64_t, SecMsgBucket> smsgSets;
 uint32_t nPeerIdCounter = 1;
 
 
-CCriticalSection cs_smsg;       // all except inbox, outbox and sendQueue
+CCriticalSection cs_smsg;               // all except inbox, outbox and sendQueue
 CCriticalSection cs_smsgInbox;
 CCriticalSection cs_smsgOutbox;
 CCriticalSection cs_smsgSendQueue;
@@ -424,6 +426,19 @@ void ThreadSecureMsg(void* parg)
                     } else
                         printf("Path %s does not exist \n", fullPath.string().c_str());
                     
+                    // -- look for the wl file, it stores incoming messages when wallet is locked
+                    fileName = boost::lexical_cast<std::string>(it->first) + "_01_wl.dat";
+                    fullPath = GetDataDir() / "smsgStore" / fileName;
+                    if (fs::exists(fullPath))
+                    {
+                        try {
+                            fs::remove(fullPath);
+                        } catch (const fs::filesystem_error& ex)
+                        {
+                            printf("Error removing wallet locked file %s.\n", ex.what());
+                        };
+                    };
+                    
                     smsgSets.erase(it++);
                 } else
                 {
@@ -464,7 +479,6 @@ void ThreadSecureMsg(void* parg)
                 }; // ! if (it->first < cutoffTime)
             };
         }; // LOCK(cs_smsg);
-        
     };
     
     printf("ThreadSecureMsg exited.\n");
@@ -539,7 +553,7 @@ void ThreadSecureMsgPow(void* parg)
                 }
                 
                 // -- test if message was sent to self
-                if (SecureMsgScanMessage(pHeader, pPayload, psmsg->nPayload) != 0)
+                if (SecureMsgScanMessage(pHeader, pPayload, psmsg->nPayload, true) != 0)
                 {
                     // message recipient is not this node (or failed)
                 };
@@ -605,111 +619,128 @@ int SecureMsgBuildBucketSet()
     if (fDebugSmsg)
         printf("SecureMsgBuildBucketSet()\n");
         
-    int64_t now = GetTime();
-    uint32_t nFiles = 0;
-    uint32_t nMessages = 0;
+    int64_t  now            = GetTime();
+    uint32_t nFiles         = 0;
+    uint32_t nMessages      = 0;
     
     fs::path pathSmsgDir = GetDataDir() / "smsgStore";
     fs::directory_iterator itend;
     
     
-    if (fs::exists(pathSmsgDir)
-        && fs::is_directory(pathSmsgDir))
+    if (!fs::exists(pathSmsgDir)
+        || !fs::is_directory(pathSmsgDir))
     {
-        for( fs::directory_iterator itd(pathSmsgDir) ; itd != itend ; ++itd)
+        printf("Message store directory does not exist.\n");
+        return 0; // not an error
+    }
+    
+    
+    for (fs::directory_iterator itd(pathSmsgDir) ; itd != itend ; ++itd)
+    {
+        if (!fs::is_regular_file(itd->status()))
+            continue;
+        
+        std::string fileType = (*itd).path().extension().string();
+        
+        if (fileType.compare(".dat") != 0)
+            continue;
+            
+        std::string fileName = (*itd).path().filename().string();
+        
+        if (boost::algorithm::ends_with(fileName, "_wl.dat"))
         {
-            if (!fs::is_regular_file(itd->status()))
-                continue;
-            
-            std::string fileType = (*itd).path().extension().string();
-            
-            if (fileType.compare(".dat") != 0)
-                continue;
-                
-            std::string fileName = (*itd).path().filename().string();
-            
             if (fDebugSmsg)
-                printf("Processing file: %s.\n", fileName.c_str());
-            
-            nFiles++;
-            
-            // TODO files must be split if > 2GB
-            // time_noFile.dat
-            size_t sep = fileName.find_last_of("_");
-            if (sep == std::string::npos)
-                continue;
-            
-            std::string stime = fileName.substr(0, sep);
-            
-            int64_t fileTime = boost::lexical_cast<int64_t>(stime);
-            
-            if (fileTime < now - SMSG_RETENTION)
-            {
-                printf("Dropping message set %"PRI64d".\n", fileTime);
-                fs::remove((*itd).path());
-                continue;
-            };
-            
-            
-            SecureMessage smsg;
-            std::set<SecMsgToken>& tokenSet = smsgSets[fileTime].setTokens;
-            
-            {
-                LOCK(cs_smsg);
-                FILE *fp;
-                
-                if (!(fp = fopen((*itd).path().string().c_str(), "rb")))
-                {
-                    printf("Error opening file: %s\n", strerror(errno));
-                    continue;
-                };
-                
-                while (1)
-                {
-                    long int ofs = ftell(fp);
-                    SecMsgToken token;
-                    token.offset = ofs;
-                    errno = 0;
-                    if (fread(&smsg.hash[0], sizeof(unsigned char), SMSG_HDR_LEN, fp) != (size_t)SMSG_HDR_LEN)
-                    {
-                        if (errno != 0)
-                        {
-                            printf("fread header failed: %s\n", strerror(errno));
-                        } else
-                        {
-                            //printf("End of file.\n");
-                        };
-                        break;
-                    };
-                    token.timestamp = smsg.timestamp;
-                    
-                    if (smsg.nPayload < 8)
-                        continue;
-                    
-                    if (fread(token.sample, sizeof(unsigned char), 8, fp) != 8)
-                    {
-                        printf("fread data failed: %s\n", strerror(errno));
-                        break;
-                    };
-                    
-                    if (fseek(fp, smsg.nPayload-8, SEEK_CUR) != 0)
-                    {
-                        printf("fseek, strerror: %s.\n", strerror(errno));
-                        break;
-                    };
-                    
-                    tokenSet.insert(token);
-                };
-                
-                fclose(fp);
-            };
-            smsgSets[fileTime].hashBucket();
-            
-            nMessages += tokenSet.size();
-            
-            if (fDebugSmsg)
-                printf("Bucket %"PRI64d" contains %"PRIszu" messages.\n", fileTime, tokenSet.size());
+                printf("Skipping wallet locked file: %s.\n", fileName.c_str());
+            continue;
         };
+        
+        
+        if (fDebugSmsg)
+            printf("Processing file: %s.\n", fileName.c_str());
+        
+        nFiles++;
+        
+        // TODO files must be split if > 2GB
+        // time_noFile.dat
+        size_t sep = fileName.find_last_of("_");
+        if (sep == std::string::npos)
+            continue;
+        
+        std::string stime = fileName.substr(0, sep);
+        
+        int64_t fileTime = boost::lexical_cast<int64_t>(stime);
+        
+        if (fileTime < now - SMSG_RETENTION)
+        {
+            printf("Dropping message set %"PRI64d".\n", fileTime);
+            try {
+                fs::remove((*itd).path());
+            } catch (const fs::filesystem_error& ex)
+            {
+                printf("Error removing bucket file %s.\n", ex.what());
+            };
+            continue;
+        };
+        
+        
+        SecureMessage smsg;
+        std::set<SecMsgToken>& tokenSet = smsgSets[fileTime].setTokens;
+        
+        {
+            LOCK(cs_smsg);
+            FILE *fp;
+            
+            if (!(fp = fopen((*itd).path().string().c_str(), "rb")))
+            {
+                printf("Error opening file: %s\n", strerror(errno));
+                continue;
+            };
+            
+            for (;;)
+            {
+                long int ofs = ftell(fp);
+                SecMsgToken token;
+                token.offset = ofs;
+                errno = 0;
+                if (fread(&smsg.hash[0], sizeof(unsigned char), SMSG_HDR_LEN, fp) != (size_t)SMSG_HDR_LEN)
+                {
+                    if (errno != 0)
+                    {
+                        printf("fread header failed: %s\n", strerror(errno));
+                    } else
+                    {
+                        //printf("End of file.\n");
+                    };
+                    break;
+                };
+                token.timestamp = smsg.timestamp;
+                
+                if (smsg.nPayload < 8)
+                    continue;
+                
+                if (fread(token.sample, sizeof(unsigned char), 8, fp) != 8)
+                {
+                    printf("fread data failed: %s\n", strerror(errno));
+                    break;
+                };
+                
+                if (fseek(fp, smsg.nPayload-8, SEEK_CUR) != 0)
+                {
+                    printf("fseek, strerror: %s.\n", strerror(errno));
+                    break;
+                };
+                
+                tokenSet.insert(token);
+            };
+            
+            fclose(fp);
+        };
+        smsgSets[fileTime].hashBucket();
+        
+        nMessages += tokenSet.size();
+        
+        if (fDebugSmsg)
+            printf("Bucket %"PRI64d" contains %"PRIszu" messages.\n", fileTime, tokenSet.size());
     };
     
     printf("Processed %u files, loaded %"PRIszu" buckets containing %u messages.\n", nFiles, smsgSets.size(), nMessages);
@@ -1680,21 +1711,186 @@ bool SecureMsgScanBlockChain()
     return true;
 };
 
-int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload)
+
+int SecureMsgWalletUnlocked()
+{
+    /*
+    When the wallet is unlocked scan messages received while wallet was locked.
+    */
+    if (!fSecMsgEnabled)
+        return 0;
+    
+    
+    printf("SecureMsgWalletUnlocked()\n");
+    
+    if (pwalletMain->IsLocked())
+    {
+        printf("Error: Wallet is locked.\n");
+        return 1;
+    };
+    
+    int64_t  now            = GetTime();
+    uint32_t nFiles         = 0;
+    uint32_t nMessages      = 0;
+    uint32_t nFoundMessages = 0;
+    
+    fs::path pathSmsgDir = GetDataDir() / "smsgStore";
+    fs::directory_iterator itend;
+    
+    if (!fs::exists(pathSmsgDir)
+        || !fs::is_directory(pathSmsgDir))
+    {
+        printf("Message store directory does not exist.\n");
+        return 0; // not an error
+    };
+    
+    SecureMessage smsg;
+    std::vector<unsigned char> vchData;
+    
+    for (fs::directory_iterator itd(pathSmsgDir) ; itd != itend ; ++itd)
+    {
+        if (!fs::is_regular_file(itd->status()))
+            continue;
+        
+        std::string fileName = (*itd).path().filename().string();
+        
+        if (!boost::algorithm::ends_with(fileName, "_wl.dat"))
+            continue;
+        
+        if (fDebugSmsg)
+            printf("Processing file: %s.\n", fileName.c_str());
+        
+        nFiles++;
+        
+        // TODO files must be split if > 2GB
+        // time_noFile_wl.dat
+        size_t sep = fileName.find_first_of("_");
+        if (sep == std::string::npos)
+            continue;
+        
+        std::string stime = fileName.substr(0, sep);
+        
+        int64_t fileTime = boost::lexical_cast<int64_t>(stime);
+        
+        if (fileTime < now - SMSG_RETENTION)
+        {
+            printf("Dropping wallet locked file %"PRI64d".\n", fileTime);
+            try {
+                fs::remove((*itd).path());
+            } catch (const boost::filesystem::filesystem_error& ex)
+            {
+                printf("Error removing wl file %s - %s\n", fileName.c_str(), ex.what());
+                return 1;
+            };
+            continue;
+        };
+        
+        {
+            LOCK(cs_smsg);
+            FILE *fp;
+            
+            if (!(fp = fopen((*itd).path().string().c_str(), "rb")))
+            {
+                printf("Error opening file: %s\n", strerror(errno));
+                continue;
+            };
+            
+            for (;;)
+            {
+                errno = 0;
+                if (fread(&smsg.hash[0], sizeof(unsigned char), SMSG_HDR_LEN, fp) != (size_t)SMSG_HDR_LEN)
+                {
+                    if (errno != 0)
+                    {
+                        printf("fread header failed: %s\n", strerror(errno));
+                    } else
+                    {
+                        //printf("End of file.\n");
+                    };
+                    break;
+                };
+                
+                try {
+                    vchData.resize(smsg.nPayload);
+                } catch (std::exception& e)
+                {
+                    printf("SecureMsgWalletUnlocked(): Could not resize vchData, %u, %s\n", smsg.nPayload, e.what());
+                    fclose(fp);
+                    return 1;
+                };
+                
+                if (fread(&vchData[0], sizeof(unsigned char), smsg.nPayload, fp) != smsg.nPayload)
+                {
+                    printf("fread data failed: %s\n", strerror(errno));
+                    break;
+                };
+                
+                // -- don't report to gui, 
+                int rv = SecureMsgScanMessage(&smsg.hash[0], &vchData[0], smsg.nPayload, false);
+                
+                if (rv == 0)
+                {
+                    nFoundMessages++;
+                } else
+                if (rv != 0)
+                {
+                    // SecureMsgScanMessage failed
+                };
+                
+                nMessages ++;
+            };
+            
+            fclose(fp);
+            
+            // -- remove wl file when scanned
+            try {
+                fs::remove((*itd).path());
+            } catch (const boost::filesystem::filesystem_error& ex)
+            {
+                printf("Error removing wl file %s - %s\n", fileName.c_str(), ex.what());
+                return 1;
+            };
+        };
+    };
+    
+    printf("Processed %u files, scanned %u messages, received %u messages.\n", nFiles, nMessages, nFoundMessages);
+    
+    // -- notify gui
+    NotifySecMsgWalletUnlocked();
+    
+    return 0;
+};
+
+int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool reportToGui)
 {
     /* 
     Check if message belongs to this node.
     If so add to inbox db.
     
+    if !reportToGui don't fire NotifySecMsgInboxChanged
+     - loads messages received when wallet locked in bulk.
+    
     returns
         0 success,
         1 error
         2 no match
-        
+        3 wallet is locked - message stored for scanning later.
     */
     
     if (fDebugSmsg)
         printf("SecureMsgScanMessage()\n");
+    
+    if (pwalletMain->IsLocked())
+    {
+        if (fDebugSmsg)
+            printf("ScanMessage: Wallet is locked, storing message to scan later.\n");
+        
+        int rv;
+        if ((rv = SecureMsgStoreUnscanned(pHeader, pPayload, nPayload)) != 0)
+            return 1;
+        
+        return 3;
+    };
     
     std::string addressTo;
     MessageData msg; // placeholder
@@ -1736,7 +1932,13 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
             smsgInbox.sAddrTo       = addressTo;
             
             // -- data may not be contiguous
-            smsgInbox.vchMessage.resize(SMSG_HDR_LEN + nPayload);
+            try {
+                smsgInbox.vchMessage.resize(SMSG_HDR_LEN + nPayload);
+            } catch (std::exception& e)
+            {
+                printf("SecureMsgScanMessage(): Could not resize vchData, %u, %s\n", SMSG_HDR_LEN + nPayload, e.what());
+                return 1;
+            };
             memcpy(&smsgInbox.vchMessage[0], pHeader, SMSG_HDR_LEN);
             memcpy(&smsgInbox.vchMessage[SMSG_HDR_LEN], pPayload, nPayload);
             
@@ -1754,7 +1956,8 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
                 vchUnread.insert(vchUnread.end(), vchKey.begin(), vchKey.end()); // append
                 dbInbox.WriteUnread(vchUnread);
                 
-                NotifySecMsgInboxChanged(smsgInbox);
+                if (reportToGui)
+                    NotifySecMsgInboxChanged(smsgInbox);
                 printf("SecureMsg saved to inbox, received with %s.\n", addressTo.c_str());
             };
         }
@@ -2047,7 +2250,7 @@ int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData)
             break; // continue?
         };
         
-        if (SecureMsgScanMessage(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload) != 0)
+        if (SecureMsgScanMessage(&vchData[n], &vchData[n + SMSG_HDR_LEN], psmsg->nPayload, true) != 0)
         {
             // message recipient is not this node (or failed)
         };
@@ -2070,6 +2273,73 @@ int SecureMsgReceive(CNode* pfrom, std::vector<unsigned char>& vchData)
     
     return 0;
 };
+
+int SecureMsgStoreUnscanned(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload)
+{
+    /*
+    When the wallet is locked a copy of each received message is stored to be scanned later if wallet is unlocked
+    */
+    
+    if (fDebugSmsg)
+        printf("SecureMsgStoreUnscanned()\n");
+    
+    if (!pHeader
+        || !pPayload)
+    {
+        printf("Error: null pointer to header or payload.\n");
+        return 1;
+    };
+    
+    SecureMessage* psmsg = (SecureMessage*) pHeader;
+    
+    fs::path pathSmsgDir;
+    try {
+        pathSmsgDir = GetDataDir() / "smsgStore";
+        fs::create_directory(pathSmsgDir);
+    } catch (const boost::filesystem::filesystem_error& ex)
+    {
+        printf("Error: Failed to create directory %s - %s\n", pathSmsgDir.string().c_str(), ex.what());
+        return 1;
+    };
+    
+    int64_t now = GetTime();
+    if (psmsg->timestamp > now + SMSG_TIME_LEEWAY)
+    {
+        printf("Message > now.\n");
+        return 1;
+    } else
+    if (psmsg->timestamp < now - SMSG_RETENTION)
+    {
+        printf("Message < SMSG_RETENTION.\n");
+        return 1;
+    };
+    
+    int64_t bucket = psmsg->timestamp - (psmsg->timestamp % SMSG_BUCKET_LEN);
+
+    std::string fileName = boost::lexical_cast<std::string>(bucket) + "_01_wl.dat";
+    fs::path fullpath = pathSmsgDir / fileName;
+    
+    FILE *fp;
+    errno = 0;
+    if (!(fp = fopen(fullpath.string().c_str(), "ab")))
+    {
+        printf("Error opening file: %s\n", strerror(errno));
+        return 1;
+    };
+    
+    if (fwrite(pHeader, sizeof(unsigned char), SMSG_HDR_LEN, fp) != (size_t)SMSG_HDR_LEN
+        || fwrite(pPayload, sizeof(unsigned char), nPayload, fp) != nPayload)
+    {
+        printf("fwrite failed: %s\n", strerror(errno));
+        fclose(fp);
+        return 1;
+    };
+    
+    fclose(fp);
+    
+    return 0;
+};
+
 
 int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool fUpdateBucket)
 {
@@ -2158,7 +2428,7 @@ int SecureMsgStore(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPa
             return 1;
         };
         
-        // -- on windows ftell will always return 0 after fopen(ab), just for fun.
+        // -- on windows ftell will always return 0 after fopen(ab), call fseek to set.
         errno = 0;
         if (fseek(fp, 0, SEEK_END) != 0)
         {
@@ -2629,6 +2899,13 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
     
     if (fDebugSmsg)
         printf("SecureMsgSend(%s, %s, ...)\n", addressFrom.c_str(), addressTo.c_str());
+    
+    if (pwalletMain->IsLocked())
+    {
+        sError = "Wallet is locked, wallet must be unlocked to send and recieve messages.";
+        printf("Wallet is locked, wallet must be unlocked to send and recieve messages.\n");
+        return 1;
+    };
     
     if (message.size() > SMSG_MAX_MSG_BYTES)
     {

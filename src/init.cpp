@@ -74,6 +74,9 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
         fShutdown = true;
+        
+        SecureMsgShutdown();
+        
         nTransactionsUpdated++;
         bitdb.Flush(false);
         StopNode();
@@ -82,8 +85,6 @@ void Shutdown(void* parg)
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         NewThread(ExitTimeout, NULL);
-        
-        SecureMsgShutdown();
         
         Sleep(50);
         printf("CinniCoin exited\n\n");
