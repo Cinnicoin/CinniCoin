@@ -2,13 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-/*
-    Link in bitcoinrpc.h/cpp
-*/
-
-
-// #include <unordered_set>
-
 #include "main.h"
 #include "bitcoinrpc.h"
 
@@ -78,10 +71,34 @@ Value smsgscanchain(const Array& params, bool fHelp)
     Object result;
     if (!SecureMsgScanBlockChain())
     {
-        result.push_back(Pair("result", "Scan Failed."));
+        result.push_back(Pair("result", "Scan Chain Failed."));
     } else
     {
-        result.push_back(Pair("result", "Scan Completed."));
+        result.push_back(Pair("result", "Scan Chain Completed."));
+    }
+    return result;
+}
+
+Value smsgscanbuckets(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "smsgscanbuckets \n"
+            "Force rescan of all messages in the bucket store.");
+    
+    if (!fSecMsgEnabled)
+        throw runtime_error("Secure messaging is disabled.");
+    
+    if (pwalletMain->IsLocked())
+        throw runtime_error("Wallet is locked.");
+    
+    Object result;
+    if (!SecureMsgScanBuckets())
+    {
+        result.push_back(Pair("result", "Scan Buckets Failed."));
+    } else
+    {
+        result.push_back(Pair("result", "Scan Buckets Completed."));
     }
     return result;
 }
@@ -204,52 +221,209 @@ Value smsggetpubkey(const Array& params, bool fHelp)
     return result;
 }
 
-Value smsglistlocalkeys(const Array& params, bool fHelp)
+Value smsglocalkeys(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 3)
         throw runtime_error(
-            "smsglistlocalkeys\n"
-            "List local addresses and public keys that this node can receive on.");
+            "smsglocalkeys [whitelist|all|wallet|recv <+/-> <address>|anon <+/-> <address>]\n"
+            "List and manage keys.");
     
     if (!fSecMsgEnabled)
         throw runtime_error("Secure messaging is disabled.");
     
     Object result;
     
-    // TODO: whitelist of addresses to receive on
-    BOOST_FOREACH(const PAIRTYPE(CTxDestination, std::string)& entry, pwalletMain->mapAddressBook)
+    std::string mode = "whitelist";
+    if (params.size() > 0)
     {
-        if (!IsMine(*pwalletMain, entry.first))
-            continue;
-        
-        CBitcoinAddress coinAddress(entry.first);
-        if (!coinAddress.IsValid())
-            continue;
-        
-        std::string address;
-        std::string strPublicKey;
-        address = coinAddress.ToString();
-        
-        CKeyID keyID;
-        if (!coinAddress.GetKeyID(keyID))
-            continue;
-        
-        CKey key;
-        if (!pwalletMain->GetKey(keyID, key))
-            continue;
-        
-        key.SetCompressedPubKey(); // make sure key is compressed
-        
-        CPubKey pubKey = key.GetPubKey();
-        if (!pubKey.IsValid()
-            || !pubKey.IsCompressed())
+        mode = params[0].get_str();
+    };
+    
+    char cbuf[256];
+    
+    if (mode == "whitelist"
+        || mode == "all")
+    {
+        uint32_t nKeys = 0;
+        int all = mode == "all" ? 1 : 0;
+        for (std::vector<SecMsgAddress>::iterator it = smsgAddresses.begin(); it != smsgAddresses.end(); ++it)
         {
-            continue;
+            if (!all 
+                && !it->fReceiveEnabled)
+                continue;
+            
+            CBitcoinAddress coinAddress(it->sAddress);
+            if (!coinAddress.IsValid())
+                continue;
+            
+            std::string sPublicKey;
+            
+            CKeyID keyID;
+            if (!coinAddress.GetKeyID(keyID))
+                continue;
+            
+            CPubKey pubKey;
+            if (!pwalletMain->GetPubKey(keyID, pubKey))
+                continue;
+            if (!pubKey.IsValid()
+                || !pubKey.IsCompressed())
+            {
+                continue;
+            };
+            
+            
+            sPublicKey = EncodeBase58(pubKey.Raw());
+            
+            std::string sLabel = pwalletMain->mapAddressBook[keyID];
+            std::string sInfo;
+            if (all)
+                sInfo = std::string("Receive ") + (it->fReceiveEnabled ? "on,  " : "off, ");
+            sInfo += std::string("Anon ") + (it->fReceiveAnon ? "on" : "off");
+            result.push_back(Pair("key", it->sAddress + " - " + sPublicKey + " " + sInfo + " - " + sLabel));
+            
+            nKeys++;
         };
         
-        strPublicKey = EncodeBase58(pubKey.Raw());
         
-        result.push_back(Pair("result", address + " - " + strPublicKey));
+        snprintf(cbuf, sizeof(cbuf), "%u keys listed.", nKeys);
+        result.push_back(Pair("result", std::string(cbuf)));
+        
+    } else
+    if (mode == "recv")
+    {
+        if (params.size() < 3)
+        {
+            result.push_back(Pair("result", "Too few parameters."));
+            result.push_back(Pair("expected", "recv <+/-> <address>"));
+            return result;
+        };
+        
+        std::string op      = params[1].get_str();
+        std::string addr    = params[2].get_str();
+        
+        std::vector<SecMsgAddress>::iterator it;
+        for (it = smsgAddresses.begin(); it != smsgAddresses.end(); ++it)
+        {
+            if (addr != it->sAddress)
+                continue;
+            break;
+        };
+        
+        if (it == smsgAddresses.end())
+        {
+            result.push_back(Pair("result", "Address not found."));
+            return result;
+        };
+        
+        if (op == "+" || op == "on"  || op == "add" || op == "a")
+        {
+            it->fReceiveEnabled = true;
+        } else
+        if (op == "-" || op == "off" || op == "rem" || op == "r")
+        {
+            it->fReceiveEnabled = false;
+        } else
+        {
+            result.push_back(Pair("result", "Unknown operation."));
+            return result;
+        };
+        
+        std::string sInfo;
+        sInfo = std::string("Receive ") + (it->fReceiveEnabled ? "on, " : "off,");
+        sInfo += std::string("Anon ") + (it->fReceiveAnon ? "on" : "off");
+        result.push_back(Pair("result", "Success."));
+        result.push_back(Pair("key", it->sAddress + " " + sInfo));
+        return result;
+        
+    } else
+    if (mode == "anon")
+    {
+        if (params.size() < 3)
+        {
+            result.push_back(Pair("result", "Too few parameters."));
+            result.push_back(Pair("expected", "anon <+/-> <address>"));
+            return result;
+        };
+        
+        std::string op      = params[1].get_str();
+        std::string addr    = params[2].get_str();
+        
+        std::vector<SecMsgAddress>::iterator it;
+        for (it = smsgAddresses.begin(); it != smsgAddresses.end(); ++it)
+        {
+            if (addr != it->sAddress)
+                continue;
+            break;
+        };
+        
+        if (it == smsgAddresses.end())
+        {
+            result.push_back(Pair("result", "Address not found."));
+            return result;
+        };
+        
+        if (op == "+" || op == "on"  || op == "add" || op == "a")
+        {
+            it->fReceiveAnon = true;
+        } else
+        if (op == "-" || op == "off" || op == "rem" || op == "r")
+        {
+            it->fReceiveAnon = false;
+        } else
+        {
+            result.push_back(Pair("result", "Unknown operation."));
+            return result;
+        };
+        
+        std::string sInfo;
+        sInfo = std::string("Receive ") + (it->fReceiveEnabled ? "on, " : "off,");
+        sInfo += std::string("Anon ") + (it->fReceiveAnon ? "on" : "off");
+        result.push_back(Pair("result", "Success."));
+        result.push_back(Pair("key", it->sAddress + " " + sInfo));
+        return result;
+        
+    } else
+    if (mode == "wallet")
+    {
+        uint32_t nKeys = 0;
+        BOOST_FOREACH(const PAIRTYPE(CTxDestination, std::string)& entry, pwalletMain->mapAddressBook)
+        {
+            if (!IsMine(*pwalletMain, entry.first))
+                continue;
+            
+            CBitcoinAddress coinAddress(entry.first);
+            if (!coinAddress.IsValid())
+                continue;
+            
+            std::string address;
+            std::string sPublicKey;
+            address = coinAddress.ToString();
+            
+            CKeyID keyID;
+            if (!coinAddress.GetKeyID(keyID))
+                continue;
+            
+            CPubKey pubKey;
+            if (!pwalletMain->GetPubKey(keyID, pubKey))
+                continue;
+            if (!pubKey.IsValid()
+                || !pubKey.IsCompressed())
+            {
+                continue;
+            };
+            
+            sPublicKey = EncodeBase58(pubKey.Raw());
+            
+            result.push_back(Pair("key", address + " - " + sPublicKey + " - " + entry.second));
+            nKeys++;
+        };
+        
+        snprintf(cbuf, sizeof(cbuf), "%u keys listed from wallet.", nKeys);
+        result.push_back(Pair("result", std::string(cbuf)));
+    } else
+    {
+        result.push_back(Pair("result", "Unknown Mode."));
+        result.push_back(Pair("expected", "smsglocalkeys [whitelist|all|wallet|recv <+/-> <address>|anon <+/-> <address>]"));
     };
     
     return result;
@@ -632,7 +806,6 @@ Value smsgoutbox(const Array& params, bool fHelp)
                 ssValue >> vchKey;
                 
                 
-                // TODO: how to be sure data is really gone?
                 if ((ret = pcursor->del(0)) != 0)
                 {
                     printf("Delete failed %d, %s\n", ret, db_strerror(ret));
@@ -726,9 +899,9 @@ Value smsgbuckets(const Array& params, bool fHelp)
         {
             LOCK(cs_smsg);
             std::map<int64_t, SecMsgBucket>::iterator it;
-            it = smsgSets.begin();
+            it = smsgBuckets.begin();
             
-            for (it = smsgSets.begin(); it != smsgSets.end(); ++it)
+            for (it = smsgBuckets.begin(); it != smsgBuckets.end(); ++it)
             {
                 std::set<SecMsgToken>& tokenSet = it->second.setTokens;
                 
@@ -794,9 +967,9 @@ Value smsgbuckets(const Array& params, bool fHelp)
         {
             LOCK(cs_smsg);
             std::map<int64_t, SecMsgBucket>::iterator it;
-            it = smsgSets.begin();
+            it = smsgBuckets.begin();
             
-            for (it = smsgSets.begin(); it != smsgSets.end(); ++it)
+            for (it = smsgBuckets.begin(); it != smsgBuckets.end(); ++it)
             {
                 std::string sFile = boost::lexical_cast<std::string>(it->first) + "_01.dat";
                 
@@ -809,7 +982,7 @@ Value smsgbuckets(const Array& params, bool fHelp)
                     printf("Error removing bucket file %s.\n", ex.what());
                 };
             };
-            smsgSets.clear();
+            smsgBuckets.clear();
         }; // LOCK(cs_smsg);
         
         result.push_back(Pair("result", "Removed all buckets."));

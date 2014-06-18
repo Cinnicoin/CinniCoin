@@ -52,8 +52,11 @@ extern boost::signals2::signal<void (SecOutboxMsg& outboxHdr)> NotifySecMsgOutbo
 extern boost::signals2::signal<void ()> NotifySecMsgWalletUnlocked;
 
 
+class SecMsgAddress;
 
-extern std::map<int64_t, SecMsgBucket> smsgSets;
+extern std::map<int64_t, SecMsgBucket> smsgBuckets;
+extern std::vector<SecMsgAddress> smsgAddresses;
+
 extern CCriticalSection cs_smsg;            // all except inbox and outbox
 extern CCriticalSection cs_smsgInbox;
 extern CCriticalSection cs_smsgOutbox;
@@ -83,8 +86,24 @@ public:
 class SecMsgAddress
 {
 public:
+    SecMsgAddress() {};
+    SecMsgAddress(std::string sAddr, bool receiveOn, bool receiveAnon)
+    {
+        sAddress            = sAddr;
+        fReceiveEnabled     = receiveOn;
+        fReceiveAnon        = receiveAnon;
+    };
+    
     std::string     sAddress;
+    bool            fReceiveEnabled;
     bool            fReceiveAnon;
+    
+    IMPLEMENT_SERIALIZE
+    (
+        READWRITE(this->sAddress);
+        READWRITE(this->fReceiveEnabled);
+        READWRITE(this->fReceiveAnon);
+    );
 };
 
 
@@ -343,6 +362,10 @@ std::string fsReadable(uint64_t nBytes);
 
 
 int SecureMsgBuildBucketSet();
+int SecureMsgAddWalletAddresses();
+
+int SecureMsgReadIni();
+int SecureMsgWriteIni();
 
 bool SecureMsgStart(bool fDontStart, bool fScanChain);
 bool SecureMsgShutdown();
@@ -357,9 +380,11 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle);
 bool SecureMsgScanBlock(CBlock& block);
 bool ScanChainForPublicKeys(CBlockIndex* pindexStart);
 bool SecureMsgScanBlockChain();
+bool SecureMsgScanBuckets();
 
 
 int SecureMsgWalletUnlocked();
+int SecureMsgWalletKeyChanged(std::string sAddress, std::string sLabel, ChangeType mode);
 
 int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32_t nPayload, bool reportToGui);
 
