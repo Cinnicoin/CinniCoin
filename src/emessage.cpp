@@ -71,6 +71,7 @@ std::map<int64_t, SecMsgBucket> smsgSets;
 uint32_t nPeerIdCounter = 1;
 
 
+
 CCriticalSection cs_smsg;               // all except inbox, outbox and sendQueue
 CCriticalSection cs_smsgInbox;
 CCriticalSection cs_smsgOutbox;
@@ -79,7 +80,7 @@ CCriticalSection cs_smsgSendQueue;
 
 namespace fs = boost::filesystem;
 
-bool SMsgCrypter::SetKey(const std::vector<unsigned char>& vchNewKey, unsigned char* chNewIV)
+bool SecMsgCrypter::SetKey(const std::vector<unsigned char>& vchNewKey, unsigned char* chNewIV)
 {
     // -- for EVP_aes_256_cbc() key must be 256 bit, iv must be 128 bit.
     memcpy(&chKey[0], &vchNewKey[0], sizeof(chKey));
@@ -90,7 +91,7 @@ bool SMsgCrypter::SetKey(const std::vector<unsigned char>& vchNewKey, unsigned c
     return true;
 };
 
-bool SMsgCrypter::Encrypt(unsigned char* chPlaintext, uint32_t nPlain, std::vector<unsigned char> &vchCiphertext)
+bool SecMsgCrypter::Encrypt(unsigned char* chPlaintext, uint32_t nPlain, std::vector<unsigned char> &vchCiphertext)
 {
     if (!fKeySet)
         return false;
@@ -119,7 +120,7 @@ bool SMsgCrypter::Encrypt(unsigned char* chPlaintext, uint32_t nPlain, std::vect
     return true;
 };
 
-bool SMsgCrypter::Decrypt(unsigned char* chCiphertext, uint32_t nCipher, std::vector<unsigned char>& vchPlaintext)
+bool SecMsgCrypter::Decrypt(unsigned char* chCiphertext, uint32_t nCipher, std::vector<unsigned char>& vchPlaintext)
 {
     if (!fKeySet)
         return false;
@@ -426,7 +427,7 @@ void ThreadSecureMsg(void* parg)
                     } else
                         printf("Path %s does not exist \n", fullPath.string().c_str());
                     
-                    // -- look for the wl file, it stores incoming messages when wallet is locked
+                    // -- look for a wl file, it stores incoming messages when wallet is locked
                     fileName = boost::lexical_cast<std::string>(it->first) + "_01_wl.dat";
                     fullPath = GetDataDir() / "smsgStore" / fileName;
                     if (fs::exists(fullPath))
@@ -1929,6 +1930,7 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
             
             SecInboxMsg smsgInbox;
             smsgInbox.timeReceived  = GetTime();
+            smsgInbox.status        = (SMSG_MASK_UNREAD) & 0xFF;
             smsgInbox.sAddrTo       = addressTo;
             
             // -- data may not be contiguous
@@ -1949,12 +1951,6 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
             } else
             {
                 dbInbox.WriteSmesg(vchKey, smsgInbox);
-                
-                // -- Add to unread list, must be a better way...
-                std::vector<unsigned char> vchUnread;
-                dbInbox.ReadUnread(vchUnread);
-                vchUnread.insert(vchUnread.end(), vchKey.begin(), vchKey.end()); // append
-                dbInbox.WriteUnread(vchUnread);
                 
                 if (reportToGui)
                     NotifySecMsgInboxChanged(smsgInbox);
@@ -2840,7 +2836,7 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     };
     
     
-    SMsgCrypter crypter;
+    SecMsgCrypter crypter;
     crypter.SetKey(key_e, smsg.iv);
     std::vector<unsigned char> vchCiphertext;
     
@@ -3208,7 +3204,7 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeade
     if (fTestOnly)
         return 0;
     
-    SMsgCrypter crypter;
+    SecMsgCrypter crypter;
     crypter.SetKey(key_e, psmsg->iv);
     std::vector<unsigned char> vchPayload;
     if (!crypter.Decrypt(pPayload, nPayload, vchPayload))

@@ -27,6 +27,11 @@ const unsigned int SMSG_MAX_MSG_BYTES   = 4096;              // the user input p
 const unsigned int SMSG_MAX_MSG_WORST = LZ4_COMPRESSBOUND(SMSG_MAX_MSG_BYTES+SMSG_PL_HDR_LEN);
 
 
+
+#define SMSG_MASK_UNREAD            (1 << 0)
+
+
+
 extern bool fSecMsgEnabled;
 
 /** Inbox db changed.
@@ -75,7 +80,15 @@ public:
 };
 
 
-class SMsgCrypter
+class SecMsgAddress
+{
+public:
+    std::string     sAddress;
+    bool            fReceiveAnon;
+};
+
+
+class SecMsgCrypter
 {
 private:
     unsigned char chKey[32];
@@ -83,7 +96,7 @@ private:
     bool fKeySet;
 public:
     
-    SMsgCrypter()
+    SecMsgCrypter()
     {
         // Try to keep the key data out of swap (and be a bit over-careful to keep the IV that we don't even use out of swap)
         // Note that this does nothing about suspend-to-disk (which will put all our key data on disk)
@@ -93,7 +106,7 @@ public:
         fKeySet = false;
     }
     
-    ~SMsgCrypter()
+    ~SecMsgCrypter()
     {
         // clean key
         memset(&chKey, 0, sizeof chKey);
@@ -114,12 +127,14 @@ class SecInboxMsg
 {
 public:
     int64_t                         timeReceived;
-    std::string                     sAddrTo; // pointless not storing this, if someone sees message in local db, they already know it's to you.
+    char                            status;     // read etc
+    std::string                     sAddrTo;    // pointless not storing this, if someone sees message in local db, they already know it's to you.
     std::vector<unsigned char>      vchMessage;
     
     IMPLEMENT_SERIALIZE
     (
         READWRITE(this->timeReceived);
+        READWRITE(this->status);
         READWRITE(this->sAddrTo);
         READWRITE(this->vchMessage);
     );
@@ -141,19 +156,26 @@ public:
         return GetCursor();
     }
     
+    Dbc* GetTxnCursor()
+    {
+        if (!pdb)
+            return NULL;
+        
+        DbTxn* ptxnid = activeTxn; // call TxnBegin first
+        
+        Dbc* pcursor = NULL;
+        int ret = pdb->cursor(ptxnid, &pcursor, 0);
+        if (ret != 0)
+            return NULL;
+        return pcursor;
+    }
+    
+    DbTxn* GetAtActiveTxn()
+    {
+        return activeTxn;
+    }
+    
     bool NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecInboxMsg& smsgInbox);
-    
-    bool ReadUnread(std::vector<unsigned char>& vchUnread)
-    {
-        std::string skey = "Unread";
-        return Read(skey, vchUnread);
-    }
-    
-    bool WriteUnread(std::vector<unsigned char>& vchUnread)
-    {
-        std::string skey = "Unread";
-        return Write(skey, vchUnread);
-    }
     
     bool ReadSmesg(std::vector<unsigned char>& vchKey, SecInboxMsg& smsgib)
     {
@@ -209,6 +231,25 @@ public:
     Dbc* GetAtCursor()
     {
         return GetCursor();
+    }
+    
+    Dbc* GetTxnCursor()
+    {
+        if (!pdb)
+            return NULL;
+        
+        DbTxn* ptxnid = activeTxn; // call TxnBegin first
+        
+        Dbc* pcursor = NULL;
+        int ret = pdb->cursor(ptxnid, &pcursor, 0);
+        if (ret != 0)
+            return NULL;
+        return pcursor;
+    }
+    
+    DbTxn* GetAtActiveTxn()
+    {
+        return activeTxn;
     }
     
     bool NextSmesg(Dbc* pcursor, unsigned int fFlags, std::vector<unsigned char>& vchKey, SecOutboxMsg& smsgOutbox);

@@ -333,7 +333,6 @@ Value smsginbox(const Array& params, bool fHelp)
     
     Object result;
     
-    std::vector<unsigned char> vchUnread;
     std::vector<unsigned char> vchKey;
     vchKey.resize(16);
     memset(&vchKey[0], 0, 16);
@@ -347,13 +346,14 @@ Value smsginbox(const Array& params, bool fHelp)
         
         if (mode == "clear")
         {
-            Dbc* pcursor = dbInbox.GetAtCursor();
+            dbInbox.TxnBegin();
+            Dbc* pcursor = dbInbox.GetTxnCursor();
+            //Dbc* pcursor = dbInbox.GetAtCursor();
             if (!pcursor)
                 throw runtime_error("Cannot get inbox DB cursor");
             
             uint32_t nMessages = 0;
             
-            std::set<std::vector<unsigned char> > setToDelete;
             std::set<std::vector<unsigned char> >::iterator itd;
             
             Dbt datKey;
@@ -406,7 +406,7 @@ Value smsginbox(const Array& params, bool fHelp)
                 if (datKey.get_data() == NULL || datValue.get_data() == NULL
                     || ret != 0)
                 {
-                    snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s\n", ret, db_strerror(ret));
+                    snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s", ret, db_strerror(ret));
                     throw runtime_error(cbuf);
                 };
                 
@@ -419,83 +419,29 @@ Value smsginbox(const Array& params, bool fHelp)
                 ssValue.write((char*)datKey.get_data(), datKey.get_size());
                 ssValue >> vchKey;
                 
-                setToDelete.insert(vchKey);
-                
-                /*
-                // TODO: how to be sure data is really gone?
-                if ((ret = pcursor->del(0)) != 0) // NOT working
+                if ((ret = pcursor->del(0)) != 0)
                 {
                     printf("Delete failed %d, %s\n", ret, db_strerror(ret));
                 };
-                */
                 nMessages++;
             };
             pcursor->close();
+            dbInbox.TxnCommit();
             
-            for (itd = setToDelete.begin(); itd != setToDelete.end(); ++itd)
-            {
-                std::vector<unsigned char> vchDeleteT = (*itd);
-                dbInbox.EraseSmesg(vchDeleteT);
-            };
-            
-            
-            vchUnread.resize(0);
-            dbInbox.WriteUnread(vchUnread);
             
             
             snprintf(cbuf, sizeof(cbuf), "Deleted %u messages.", nMessages);
             result.push_back(Pair("result", std::string(cbuf)));
             
         } else
-        if (mode == "unread")
+        if (mode == "all"
+            || mode == "unread")
         {
-            SecInboxMsg smsgInbox;
-
-            dbInbox.ReadUnread(vchUnread);
+            int fCheckReadStatus = mode == "unread" ? 1 : 0;
             
-            //result.push_back(Pair("unread", ValueString(vchUnread).c_str()));
-            
-            size_t nMessages = vchUnread.size() / 16;
-            
-            if (nMessages == 0)
-            {
-                result.push_back(Pair("result", "No unread messages."));
-            } else
-            {
-                for (uint32_t i = 0; i < nMessages; ++i)
-                {
-                    memcpy(&vchKey[0], &vchUnread[i*16], 16);
-                    
-                    dbInbox.ReadSmesg(vchKey, smsgInbox);
-                    
-                    MessageData msg;
-                    
-                    uint32_t nPayload = smsgInbox.vchMessage.size() - SMSG_HDR_LEN;
-                    if (SecureMsgDecrypt(false, smsgInbox.sAddrTo, &smsgInbox.vchMessage[0], &smsgInbox.vchMessage[SMSG_HDR_LEN], nPayload, msg) == 0)
-                    {
-                        Object objM;
-                        objM.push_back(Pair("received", getTimeString(smsgInbox.timeReceived, cbuf, sizeof(cbuf))));
-                        objM.push_back(Pair("sent", getTimeString(msg.timestamp, cbuf, sizeof(cbuf))));
-                        objM.push_back(Pair("from", msg.sFromAddress));
-                        objM.push_back(Pair("to", smsgInbox.sAddrTo));
-                        objM.push_back(Pair("text", std::string((char*)&msg.vchMessage[0]))); // ugh
-                        
-                        result.push_back(Pair("message", objM));
-                    } else
-                    {
-                        result.push_back(Pair("message", "Could not decrypt."));
-                    };
-                };
-                
-                snprintf(cbuf, sizeof(cbuf), "%"PRIszu" unread messages shown.", nMessages);
-                result.push_back(Pair("result", std::string(cbuf)));
-                vchUnread.resize(0);
-                dbInbox.WriteUnread(vchUnread);
-            };
-        } else
-        if (mode == "all")
-        {
-            Dbc* pcursor = dbInbox.GetAtCursor();
+            dbInbox.TxnBegin();
+            Dbc* pcursor = dbInbox.GetTxnCursor();
+            //Dbc* pcursor = dbInbox.GetAtCursor();
             if (!pcursor)
                 throw runtime_error("Cannot get inbox DB cursor");
             
@@ -503,15 +449,18 @@ Value smsginbox(const Array& params, bool fHelp)
             uint32_t nMessages = 0;
             
             SecInboxMsg smsgInbox;
+            MessageData msg;
+            
             unsigned int fFlags = DB_FIRST;
             
             while (dbInbox.NextSmesg(pcursor, fFlags, vchKey, smsgInbox))
             {
                 fFlags = DB_NEXT;
                 
-                nMessages++;
+                if (fCheckReadStatus
+                    && !(smsgInbox.status & SMSG_MASK_UNREAD))
+                    continue;
                 
-                MessageData msg;
                 
                 uint32_t nPayload = smsgInbox.vchMessage.size() - SMSG_HDR_LEN;
                 if (SecureMsgDecrypt(false, smsgInbox.sAddrTo, &smsgInbox.vchMessage[0], &smsgInbox.vchMessage[SMSG_HDR_LEN], nPayload, msg) == 0)
@@ -528,9 +477,34 @@ Value smsginbox(const Array& params, bool fHelp)
                 {
                     result.push_back(Pair("message", "Could not decrypt."));
                 };
+                
+                nMessages++;
+                
+                if (fCheckReadStatus)
+                {
+                    smsgInbox.status &= ~SMSG_MASK_UNREAD;
+                    
+                    CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+                    ssKey.reserve(vchKey.size());
+                    ssKey << vchKey;
+                    Dbt datKey(&ssKey[0], ssKey.size());
+                    CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                    ssValue.clear();
+                    ssValue << smsgInbox;
+                    Dbt datValue(&ssValue[0], ssValue.size());
+                    
+                    int ret;
+                    if ((ret = pcursor->put(&datKey, &datValue, DB_CURRENT)) != 0)
+                    {
+                         snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s", ret, db_strerror(ret));
+                        throw runtime_error(cbuf);
+                    }
+                };
             };
-
+            
+            
             pcursor->close();
+            dbInbox.TxnCommit();
             
             snprintf(cbuf, sizeof(cbuf), "%u messages shown.", nMessages);
             result.push_back(Pair("result", std::string(cbuf)));
@@ -583,13 +557,14 @@ Value smsgoutbox(const Array& params, bool fHelp)
         
         if (mode == "clear")
         {
-            Dbc* pcursor = dbOutbox.GetAtCursor();
+            dbOutbox.TxnBegin();
+            Dbc* pcursor = dbOutbox.GetTxnCursor();
+            //Dbc* pcursor = dbOutbox.GetAtCursor();
             if (!pcursor)
                 throw runtime_error("Cannot get outbox DB cursor");
             
             uint32_t nMessages = 0;
             
-            std::set<std::vector<unsigned char> > setToDelete;
             std::set<std::vector<unsigned char> >::iterator itd;
             
             Dbt datKey;
@@ -642,7 +617,7 @@ Value smsgoutbox(const Array& params, bool fHelp)
                 if (datKey.get_data() == NULL || datValue.get_data() == NULL
                     || ret != 0)
                 {
-                    snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s\n", ret, db_strerror(ret));
+                    snprintf(cbuf, sizeof(cbuf), "inbox DB error %d, %s", ret, db_strerror(ret));
                     throw runtime_error(cbuf);
                 };
                 
@@ -656,24 +631,17 @@ Value smsgoutbox(const Array& params, bool fHelp)
                 //SecOutboxMsg smsgOutbox;
                 ssValue >> vchKey;
                 
-                setToDelete.insert(vchKey);
                 
-                /*
                 // TODO: how to be sure data is really gone?
-                if ((ret = pcursor->del(0)) != 0) // NOT working
+                if ((ret = pcursor->del(0)) != 0)
                 {
                     printf("Delete failed %d, %s\n", ret, db_strerror(ret));
                 };
-                */
+                
                 nMessages++;
             };
             pcursor->close();
-            
-            for (itd = setToDelete.begin(); itd != setToDelete.end(); ++itd)
-            {
-                std::vector<unsigned char> vchDeleteT = (*itd);
-                dbOutbox.EraseSmesg(vchDeleteT);
-            };
+            dbOutbox.TxnCommit();
             
             
             snprintf(cbuf, sizeof(cbuf), "Deleted %u messages.", nMessages);
