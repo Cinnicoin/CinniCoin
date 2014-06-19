@@ -80,7 +80,9 @@ boost::signals2::signal<void ()> NotifySecMsgWalletUnlocked;
 bool fSecMsgEnabled = false;
 
 std::map<int64_t, SecMsgBucket> smsgBuckets;
-std::vector<SecMsgAddress> smsgAddresses;
+std::vector<SecMsgAddress>      smsgAddresses;
+SecMsgOptions                   smsgOptions;
+
 uint32_t nPeerIdCounter = 1;
 
 
@@ -847,6 +849,14 @@ int SecureMsgReadIni()
             || !(pValue = strtok(NULL, "=")))
             continue;
         
+        if (strcmp(pName, "newAddressRecv") == 0)
+        {
+            smsgOptions.fNewAddressRecv = (strcmp(pValue, "true") == 0) ? true : false;
+        } else
+        if (strcmp(pName, "newAddressAnon") == 0)
+        {
+            smsgOptions.fNewAddressAnon = (strcmp(pValue, "true") == 0) ? true : false;
+        } else
         if (strcmp(pName, "key") == 0)
         {
             int rv = sscanf(pValue, "%64[^|]|%d|%d", cAddress, &addrRecv, &addrRecvAnon);
@@ -878,7 +888,7 @@ int SecureMsgWriteIni()
     if (fDebugSmsg)
         printf("SecureMsgWriteIni()\n");
     
-    fs::path fullpath = GetDataDir() / "smsg.ini";
+    fs::path fullpath = GetDataDir() / "smsg.ini~";
     
     FILE *fp;
     errno = 0;
@@ -888,6 +898,27 @@ int SecureMsgWriteIni()
         return 1;
     };
     
+    if (fwrite("[Options]\n", sizeof(char), 10, fp) != 10)
+    {
+        printf("fwrite error: %s\n", strerror(errno));
+        fclose(fp);
+        return false;
+    };
+    
+    if (fprintf(fp, "newAddressRecv=%s\n", smsgOptions.fNewAddressRecv ? "true" : "false") < 0
+        || fprintf(fp, "newAddressAnon=%s\n", smsgOptions.fNewAddressAnon ? "true" : "false") < 0)
+    {
+        printf("fprintf error: %s\n", strerror(errno));
+        fclose(fp);
+        return false;
+    }
+    
+    if (fwrite("\n[Keys]\n", sizeof(char), 8, fp) != 8)
+    {
+        printf("fwrite error: %s\n", strerror(errno));
+        fclose(fp);
+        return false;
+    };
     for (std::vector<SecMsgAddress>::iterator it = smsgAddresses.begin(); it != smsgAddresses.end(); ++it)
     {
         errno = 0;
@@ -901,6 +932,14 @@ int SecureMsgWriteIni()
     
     fclose(fp);
     
+    
+    try {
+        fs::path finalpath = GetDataDir() / "smsg.ini";
+        fs::rename(fullpath, finalpath);
+    } catch (const fs::filesystem_error& ex)
+    {
+        printf("Error renaming file %s, %s.\n", fullpath.string().c_str(), ex.what());
+    };
     return 0;
 };
 
@@ -982,6 +1021,7 @@ bool SecureMsgEnable()
         LOCK(cs_smsg);
         fSecMsgEnabled = true;
         
+        smsgAddresses.clear(); // should be empty already
         if (SecureMsgReadIni() != 0)
             printf("Failed to read smsg.ini\n");
         
@@ -1060,8 +1100,6 @@ bool SecureMsgDisable()
                 pnode->smsgData.fEnabled = false;
             };
         }
-        
-        smsgBuckets.clear();
     
         if (SecureMsgWriteIni() != 0)
             printf("Failed to save smsg.ini\n");
@@ -1267,7 +1305,12 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             
             std::set<SecMsgToken>& tokenSet = (*itb).second.setTokens;
             
-            vchDataOut.resize(8 + 16 * tokenSet.size());
+            try {
+                vchDataOut.resize(8 + 16 * tokenSet.size());
+            } catch (std::exception& e) {
+                printf("vchDataOut.resize %"PRIszu" threw: %s.\n", 8 + 16 * tokenSet.size(), e.what());
+                continue;
+            };
             memcpy(&vchDataOut[0], &time, 8);
             
             unsigned char* p = &vchDataOut[8];
@@ -1341,7 +1384,13 @@ bool SecureMsgReceiveData(CNode* pfrom, std::string strCommand, CDataStream& vRe
             if (it == tokenSet.end())
             {
                 int nd = vchDataOut.size();
-                vchDataOut.resize(nd + 16);
+                try {
+                    vchDataOut.resize(nd + 16);
+                } catch (std::exception& e) {
+                    printf("vchDataOut.resize %d threw: %s.\n", nd + 16, e.what());
+                    continue;
+                };
+                
                 memcpy(&vchDataOut[nd], p, 16);
             };
             
@@ -1603,7 +1652,12 @@ bool SecureMsgSendData(CNode* pto, bool fSendTrickle)
                 
                 uint32_t hash = bkt.hash;
                 
-                vchData.resize(vchData.size() + 16);
+                try {
+                    vchData.resize(vchData.size() + 16);
+                } catch (std::exception& e) {
+                    printf("vchData.resize %"PRIszu" threw: %s.\n", vchData.size() + 16, e.what());
+                    continue;
+                };
                 memcpy(p, &it->first, 8);
                 memcpy(p+8, &nMessages, 4);
                 memcpy(p+12, &hash, 4);
@@ -2213,7 +2267,7 @@ int SecureMsgWalletKeyChanged(std::string sAddress, std::string sLabel, ChangeTy
         switch(mode)
         {
             case CT_NEW:
-                smsgAddresses.push_back(SecMsgAddress(sAddress, 1, 1));
+                smsgAddresses.push_back(SecMsgAddress(sAddress, smsgOptions.fNewAddressRecv, smsgOptions.fNewAddressAnon));
                 break;
             case CT_DELETED:
                 for (std::vector<SecMsgAddress>::iterator it = smsgAddresses.begin(); it != smsgAddresses.end(); ++it)
@@ -2324,8 +2378,7 @@ int SecureMsgScanMessage(unsigned char *pHeader, unsigned char *pPayload, uint32
             // -- data may not be contiguous
             try {
                 smsgInbox.vchMessage.resize(SMSG_HDR_LEN + nPayload);
-            } catch (std::exception& e)
-            {
+            } catch (std::exception& e) {
                 printf("SecureMsgScanMessage(): Could not resize vchData, %u, %s\n", SMSG_HDR_LEN + nPayload, e.what());
                 return 1;
             };
@@ -2530,8 +2583,7 @@ int SecureMsgRetrieve(SecMsgToken &token, std::vector<unsigned char>& vchData)
     
     try {
         vchData.resize(SMSG_HDR_LEN + smsg.nPayload);
-    } catch (std::exception& e)
-    {
+    } catch (std::exception& e) {
         printf("SecureMsgRetrieve(): Could not resize vchData, %u, %s\n", SMSG_HDR_LEN + smsg.nPayload, e.what());
         return 1;
     };
@@ -3173,7 +3225,13 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     {
         // -- only compress if over 128 bytes
         int worstCase = LZ4_compressBound(message.size());
-        vchCompressed.resize(worstCase);
+        try {
+            vchCompressed.resize(worstCase);
+        } catch (std::exception& e) {
+            printf("vchCompressed.resize %u threw: %s.\n", worstCase, e.what());
+            return 8;
+        };
+        
         int lenComp = LZ4_compress((char*)message.c_str(), (char*)&vchCompressed[0], lenMsg);
         if (lenComp < 1)
         {
@@ -3193,7 +3251,13 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
     
     if (fSendAnonymous)
     {
-        vchPayload.resize(9 + lenMsgData);
+        try {
+            vchPayload.resize(9 + lenMsgData);
+        } catch (std::exception& e) {
+            printf("vchPayload.resize %u threw: %s.\n", 9 + lenMsgData, e.what());
+            return 8;
+        };
+        
         memcpy(&vchPayload[9], pMsgData, lenMsgData);
         
         vchPayload[0] = 250; // id as anonymous message
@@ -3201,7 +3265,12 @@ int SecureMsgEncrypt(SecureMessage& smsg, std::string& addressFrom, std::string&
         memcpy(&vchPayload[5], &lenMsg, 4); // length of uncompressed plain text
     } else
     {
-        vchPayload.resize(SMSG_PL_HDR_LEN + lenMsgData);
+        try {
+            vchPayload.resize(SMSG_PL_HDR_LEN + lenMsgData);
+        } catch (std::exception& e) {
+            printf("vchPayload.resize %u threw: %s.\n", SMSG_PL_HDR_LEN + lenMsgData, e.what());
+            return 8;
+        };
         memcpy(&vchPayload[SMSG_PL_HDR_LEN], pMsgData, lenMsgData);
         // -- compact signature proves ownership of from address and allows the public key to be recovered, recipient can always reply.
         if (!pwalletMain->GetKey(ckidFrom, keyFrom))
@@ -3344,7 +3413,14 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
         smsgToSendQueue.sAddrTo       = addressTo;
         //smsgOutbox.sAddrOutbox   = addressOutbox;
         
-        smsgToSendQueue.vchMessage.resize(SMSG_HDR_LEN + smsg.nPayload);
+        try {
+            smsgToSendQueue.vchMessage.resize(SMSG_HDR_LEN + smsg.nPayload);
+        } catch (std::exception& e) {
+            printf("smsgToSendQueue.vchMessage.resize %u threw: %s.\n", SMSG_HDR_LEN + smsg.nPayload, e.what());
+            sError = "Could not allocate memory.";
+            return 8;
+        };
+        
         memcpy(&smsgToSendQueue.vchMessage[0], &smsg.hash[0], SMSG_HDR_LEN);
         memcpy(&smsgToSendQueue.vchMessage[SMSG_HDR_LEN], smsg.pPayload, smsg.nPayload);
         
@@ -3410,7 +3486,13 @@ int SecureMsgSend(std::string& addressFrom, std::string& addressTo, std::string&
                 smsgOutbox.sAddrTo       = addressTo;
                 smsgOutbox.sAddrOutbox   = addressOutbox;
                 
-                smsgOutbox.vchMessage.resize(SMSG_HDR_LEN + smsgForOutbox.nPayload);
+                try {
+                    smsgOutbox.vchMessage.resize(SMSG_HDR_LEN + smsgForOutbox.nPayload);
+                } catch (std::exception& e) {
+                    printf("smsgOutbox.vchMessage.resize %u threw: %s.\n", SMSG_HDR_LEN + smsgForOutbox.nPayload, e.what());
+                    sError = "Could not allocate memory.";
+                    return 8;
+                };
                 memcpy(&smsgOutbox.vchMessage[0], &smsgForOutbox.hash[0], SMSG_HDR_LEN);
                 memcpy(&smsgOutbox.vchMessage[SMSG_HDR_LEN], smsgForOutbox.pPayload, smsgForOutbox.nPayload);
                 
@@ -3441,6 +3523,7 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeade
             1       Error
             2       Unknown version number
             3       Decrypt address is not valid.
+            8       Could not allocate memory
     */
     
     if (fDebugSmsg)
@@ -3597,7 +3680,13 @@ int SecureMsgDecrypt(bool fTestOnly, std::string& address, unsigned char *pHeade
         pMsgData = &vchPayload[SMSG_PL_HDR_LEN];
     };
     
-    msg.vchMessage.resize(lenPlain + 1);
+    try {
+        msg.vchMessage.resize(lenPlain + 1);
+    } catch (std::exception& e) {
+        printf("msg.vchMessage.resize %u threw: %s.\n", lenPlain + 1, e.what());
+        return 8;
+    };
+    
     
     if (lenPlain > 128)
     {

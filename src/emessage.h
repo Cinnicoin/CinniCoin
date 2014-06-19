@@ -53,9 +53,11 @@ extern boost::signals2::signal<void ()> NotifySecMsgWalletUnlocked;
 
 
 class SecMsgAddress;
+class SecMsgOptions;
 
-extern std::map<int64_t, SecMsgBucket> smsgBuckets;
-extern std::vector<SecMsgAddress> smsgAddresses;
+extern std::map<int64_t, SecMsgBucket>  smsgBuckets;
+extern std::vector<SecMsgAddress>       smsgAddresses;
+extern SecMsgOptions                    smsgOptions;
 
 extern CCriticalSection cs_smsg;            // all except inbox and outbox
 extern CCriticalSection cs_smsgInbox;
@@ -104,6 +106,20 @@ public:
         READWRITE(this->fReceiveEnabled);
         READWRITE(this->fReceiveAnon);
     );
+};
+
+class SecMsgOptions
+{
+public:
+    SecMsgOptions()
+    {
+        // -- default options
+        fNewAddressRecv = true;
+        fNewAddressAnon = true;
+    }
+    
+    bool fNewAddressRecv;
+    bool fNewAddressAnon;
 };
 
 

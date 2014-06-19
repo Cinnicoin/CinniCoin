@@ -58,166 +58,84 @@ Value smsgdisable(const Array& params, bool fHelp)
     return result;
 }
 
-Value smsgscanchain(const Array& params, bool fHelp)
+Value smsgoptions(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 3)
         throw runtime_error(
-            "smsgscanchain \n"
-            "Look for public keys in the block chain.");
+            "smsgoptions [list|set <optname> <value>]\n"
+            "List and manage options.");
     
-    if (!fSecMsgEnabled)
-        throw runtime_error("Secure messaging is disabled.");
+    std::string mode = "list";
+    if (params.size() > 0)
+    {
+        mode = params[0].get_str();
+    };
     
     Object result;
-    if (!SecureMsgScanBlockChain())
+    //char cbuf[256];
+    
+    if (mode == "list")
     {
-        result.push_back(Pair("result", "Scan Chain Failed."));
+        result.push_back(Pair("option", std::string("newAddressRecv = ") + (smsgOptions.fNewAddressRecv ? "true" : "false")));
+        result.push_back(Pair("option", std::string("newAddressAnon = ") + (smsgOptions.fNewAddressAnon ? "true" : "false")));
+        
+        result.push_back(Pair("result", "Success."));
     } else
+    if (mode == "set")
     {
-        result.push_back(Pair("result", "Scan Chain Completed."));
-    }
-    return result;
-}
-
-Value smsgscanbuckets(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "smsgscanbuckets \n"
-            "Force rescan of all messages in the bucket store.");
-    
-    if (!fSecMsgEnabled)
-        throw runtime_error("Secure messaging is disabled.");
-    
-    if (pwalletMain->IsLocked())
-        throw runtime_error("Wallet is locked.");
-    
-    Object result;
-    if (!SecureMsgScanBuckets())
-    {
-        result.push_back(Pair("result", "Scan Buckets Failed."));
-    } else
-    {
-        result.push_back(Pair("result", "Scan Buckets Completed."));
-    }
-    return result;
-}
-
-Value smsgaddkey(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-            "smsgaddkey <address> <pubkey>\n"
-            "Add address, pubkey pair to database.");
-    
-    if (!fSecMsgEnabled)
-        throw runtime_error("Secure messaging is disabled.");
-    
-    std::string addr = params[0].get_str();
-    std::string pubk = params[1].get_str();
-    
-    Object result;
-    int rv = SecureMsgAddAddress(addr, pubk);
-    if (rv != 0)
-    {
-        result.push_back(Pair("result", "Public key not added to db."));
-        switch (rv)
+        if (params.size() < 3)
         {
-            case 2:     result.push_back(Pair("reason", "publicKey is invalid."));                  break;
-            case 3:     result.push_back(Pair("reason", "publicKey does not match address."));      break;
-            case 4:     result.push_back(Pair("reason", "address is already in db."));              break;
-            case 5:     result.push_back(Pair("reason", "address is invalid."));                    break;
-            default:    result.push_back(Pair("reason", "error."));                                 break;
+            result.push_back(Pair("result", "Too few parameters."));
+            result.push_back(Pair("expected", "set <optname> <value>"));
+            return result;
         };
-    } else
-    {
-        result.push_back(Pair("result", "Added public key to db."));
-    };
-    
-    return result;
-}
-
-Value smsggetpubkey(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "smsggetpubkey <address>\n"
-            "Return the base58 encoded compressed public key for an address.\n"
-            "Tests localkeys first, then looks in public key db.\n");
-    
-    if (!fSecMsgEnabled)
-        throw runtime_error("Secure messaging is disabled.");
-    
-    
-    std::string address   = params[0].get_str();
-    std::string publicKey;
-    
-    Object result;
-    int rv = SecureMsgGetLocalPublicKey(address, publicKey);
-    switch (rv)
-    {
-        case 0:
-            result.push_back(Pair("result", "Success."));
-            result.push_back(Pair("address in wallet", address));
-            result.push_back(Pair("compressed public key", publicKey));
-            return result; // success, don't check db
-        case 2:
-        case 3:
-            result.push_back(Pair("result", "Failed."));
-            result.push_back(Pair("message", "Invalid address."));
-            return result;
-        case 4:
-            break; // check db
-        //case 1:
-        default:
-            result.push_back(Pair("result", "Failed."));
-            result.push_back(Pair("message", "Error."));
-            return result;
-    };
-    
-    CBitcoinAddress coinAddress(address);
-    
-    
-    CKeyID keyID;
-    if (!coinAddress.GetKeyID(keyID))
-    {
-        result.push_back(Pair("result", "Failed."));
-        result.push_back(Pair("message", "Invalid address."));
-        return result;
-    };
-    
-    CPubKey cpkFromDB;
-    rv = SecureMsgGetStoredKey(keyID, cpkFromDB);
-    
-    switch (rv)
-    {
-        case 0:
-            if (!cpkFromDB.IsValid()
-                || !cpkFromDB.IsCompressed())
+        
+        std::string optname = params[1].get_str();
+        std::string value   = params[2].get_str();
+        
+        if (optname == "newAddressRecv")
+        {
+            if (value == "+" || value == "on"  || value == "true"  || value == "1")
             {
-                result.push_back(Pair("result", "Failed."));
-                result.push_back(Pair("message", "Invalid address."));
+                smsgOptions.fNewAddressRecv = true;
+            } else
+            if (value == "-" || value == "off" || value == "false" || value == "0")
+            {
+                smsgOptions.fNewAddressRecv = false;
             } else
             {
-                //cpkFromDB.SetCompressedPubKey(); // make sure key is compressed
-                publicKey = EncodeBase58(cpkFromDB.Raw());
-                
-                result.push_back(Pair("result", "Success."));
-                result.push_back(Pair("peer address in DB", address));
-                result.push_back(Pair("compressed public key", publicKey));
+                result.push_back(Pair("result", "Unknown value."));
+                return result;
             };
-            break;
-        case 2:
-            result.push_back(Pair("result", "Failed."));
-            result.push_back(Pair("message", "Address not found in wallet or db."));
+            result.push_back(Pair("set option", std::string("newAddressRecv = ") + (smsgOptions.fNewAddressRecv ? "true" : "false")));
+        } else
+        if (optname == "newAddressAnon")
+        {
+            if (value == "+" || value == "on"  || value == "true"  || value == "1")
+            {
+                smsgOptions.fNewAddressAnon = true;
+            } else
+            if (value == "-" || value == "off" || value == "false" || value == "0")
+            {
+                smsgOptions.fNewAddressAnon = false;
+            } else
+            {
+                result.push_back(Pair("result", "Unknown value."));
+                return result;
+            };
+            result.push_back(Pair("set option", std::string("newAddressAnon = ") + (smsgOptions.fNewAddressAnon ? "true" : "false")));
+        } else
+        {
+            result.push_back(Pair("result", "Option not found."));
             return result;
-        //case 1:
-        default:
-            result.push_back(Pair("result", "Failed."));
-            result.push_back(Pair("message", "Error, GetStoredKey()."));
-            return result;
+        };
+        
+        
+    } else
+    {
+        result.push_back(Pair("result", "Unknown Mode."));
+        result.push_back(Pair("expected", "smsgoption [list|set <optname> <value>]"));
     };
-    
     return result;
 }
 
@@ -428,6 +346,169 @@ Value smsglocalkeys(const Array& params, bool fHelp)
     
     return result;
 };
+
+Value smsgscanchain(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "smsgscanchain \n"
+            "Look for public keys in the block chain.");
+    
+    if (!fSecMsgEnabled)
+        throw runtime_error("Secure messaging is disabled.");
+    
+    Object result;
+    if (!SecureMsgScanBlockChain())
+    {
+        result.push_back(Pair("result", "Scan Chain Failed."));
+    } else
+    {
+        result.push_back(Pair("result", "Scan Chain Completed."));
+    }
+    return result;
+}
+
+Value smsgscanbuckets(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "smsgscanbuckets \n"
+            "Force rescan of all messages in the bucket store.");
+    
+    if (!fSecMsgEnabled)
+        throw runtime_error("Secure messaging is disabled.");
+    
+    if (pwalletMain->IsLocked())
+        throw runtime_error("Wallet is locked.");
+    
+    Object result;
+    if (!SecureMsgScanBuckets())
+    {
+        result.push_back(Pair("result", "Scan Buckets Failed."));
+    } else
+    {
+        result.push_back(Pair("result", "Scan Buckets Completed."));
+    }
+    return result;
+}
+
+Value smsgaddkey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+            "smsgaddkey <address> <pubkey>\n"
+            "Add address, pubkey pair to database.");
+    
+    if (!fSecMsgEnabled)
+        throw runtime_error("Secure messaging is disabled.");
+    
+    std::string addr = params[0].get_str();
+    std::string pubk = params[1].get_str();
+    
+    Object result;
+    int rv = SecureMsgAddAddress(addr, pubk);
+    if (rv != 0)
+    {
+        result.push_back(Pair("result", "Public key not added to db."));
+        switch (rv)
+        {
+            case 2:     result.push_back(Pair("reason", "publicKey is invalid."));                  break;
+            case 3:     result.push_back(Pair("reason", "publicKey does not match address."));      break;
+            case 4:     result.push_back(Pair("reason", "address is already in db."));              break;
+            case 5:     result.push_back(Pair("reason", "address is invalid."));                    break;
+            default:    result.push_back(Pair("reason", "error."));                                 break;
+        };
+    } else
+    {
+        result.push_back(Pair("result", "Added public key to db."));
+    };
+    
+    return result;
+}
+
+Value smsggetpubkey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "smsggetpubkey <address>\n"
+            "Return the base58 encoded compressed public key for an address.\n"
+            "Tests localkeys first, then looks in public key db.\n");
+    
+    if (!fSecMsgEnabled)
+        throw runtime_error("Secure messaging is disabled.");
+    
+    
+    std::string address   = params[0].get_str();
+    std::string publicKey;
+    
+    Object result;
+    int rv = SecureMsgGetLocalPublicKey(address, publicKey);
+    switch (rv)
+    {
+        case 0:
+            result.push_back(Pair("result", "Success."));
+            result.push_back(Pair("address in wallet", address));
+            result.push_back(Pair("compressed public key", publicKey));
+            return result; // success, don't check db
+        case 2:
+        case 3:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Invalid address."));
+            return result;
+        case 4:
+            break; // check db
+        //case 1:
+        default:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Error."));
+            return result;
+    };
+    
+    CBitcoinAddress coinAddress(address);
+    
+    
+    CKeyID keyID;
+    if (!coinAddress.GetKeyID(keyID))
+    {
+        result.push_back(Pair("result", "Failed."));
+        result.push_back(Pair("message", "Invalid address."));
+        return result;
+    };
+    
+    CPubKey cpkFromDB;
+    rv = SecureMsgGetStoredKey(keyID, cpkFromDB);
+    
+    switch (rv)
+    {
+        case 0:
+            if (!cpkFromDB.IsValid()
+                || !cpkFromDB.IsCompressed())
+            {
+                result.push_back(Pair("result", "Failed."));
+                result.push_back(Pair("message", "Invalid address."));
+            } else
+            {
+                //cpkFromDB.SetCompressedPubKey(); // make sure key is compressed
+                publicKey = EncodeBase58(cpkFromDB.Raw());
+                
+                result.push_back(Pair("result", "Success."));
+                result.push_back(Pair("peer address in DB", address));
+                result.push_back(Pair("compressed public key", publicKey));
+            };
+            break;
+        case 2:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Address not found in wallet or db."));
+            return result;
+        //case 1:
+        default:
+            result.push_back(Pair("result", "Failed."));
+            result.push_back(Pair("message", "Error, GetStoredKey()."));
+            return result;
+    };
+    
+    return result;
+}
 
 Value smsgsend(const Array& params, bool fHelp)
 {

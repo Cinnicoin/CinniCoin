@@ -13,38 +13,63 @@ greaterThan(QT_MAJOR_VERSION, 4) {
     DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
 }
 
-# UNCOMMENT THIS SECTION TO BUILD ON WINDOWS
-# Change paths if needed, these use the foocoin/deps.git repository locations
+# default to build_unix64
+# Use like: qmake "CONFIG+=build_win32";
+!build_win32 {
+    !build_win64 {
+        CONFIG += build_unix64
+    }
+}
+build_win32 {
+    BOOST_LIB_SUFFIX=-mgw48-mt-s-1_55
+    BOOST_INCLUDE_PATH=c:/deps/boost/include
+    BOOST_LIB_PATH=c:/deps/boost/lib
+    
+    BDB_INCLUDE_PATH=c:/deps/db-4.8.30.NC/build_unix
+    BDB_LIB_PATH=c:/deps/db-4.8.30.NC/build_unix
+    OPENSSL_INCLUDE_PATH=c:/deps/openssl_1.0.1h/include
+    OPENSSL_LIB_PATH=c:/deps/openssl_1.0.1h/lib/
 
-windows:LIBS += -lshlwapi
-LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,)
-LIBS += -lssl -lcrypto -ldb_cxx$$BDB_LIB_SUFFIX
-windows:LIBS += -lws2_32 -lole32 -loleaut32 -luuid -lgdi32
+    MINIUPNPC_INCLUDE_PATH=c:/deps/miniupnpc
+    MINIUPNPC_LIB_PATH=c:/deps/miniupnpc
 
-#BOOST_LIB_SUFFIX=-mgw48-mt-s-1_55
-#BOOST_INCLUDE_PATH=c:/deps/boost/include
-#BOOST_LIB_PATH=c:/deps/boost/lib
+    QRENCODE_INCLUDE_PATH=c:/deps/qrencode-3.4.3
+    QRENCODE_LIB_PATH=c:/deps/qrencode-3.4.3/.libs/
+}
+build_win64 {
+    BOOST_LIB_SUFFIX=-mgw48-mt-s-1_55
+    BOOST_INCLUDE_PATH=c:/deps_64/boost/include
+    BOOST_LIB_PATH=c:/deps_64/boost/lib
+    
+    BDB_INCLUDE_PATH=c:/deps_64/db-4.8.30.NC/build_unix
+    BDB_LIB_PATH=c:/deps_64/db-4.8.30.NC/build_unix
+    OPENSSL_INCLUDE_PATH=c:/deps_64/openssl_1.0.1h/include
+    OPENSSL_LIB_PATH=c:/deps_64/openssl_1.0.1h/lib/
 
-BOOST_LIB_SUFFIX=
-BOOST_INCLUDE_PATH=/usr/include/boost
-BOOST_LIB_PATH=/usr/lib/x86_64-linux-gnu/
+    MINIUPNPC_INCLUDE_PATH=c:/deps_64/miniupnpc
+    MINIUPNPC_LIB_PATH=c:/deps_64/miniupnpc
+
+    QRENCODE_INCLUDE_PATH=c:/deps_64/qrencode-3.4.3
+    QRENCODE_LIB_PATH=c:/deps_64/qrencode-3.4.3/.libs/
+    
+    DEFINES += IS_ARCH_64
+}
+build_unix64 {
+    BOOST_LIB_SUFFIX=
+    BOOST_INCLUDE_PATH=/usr/include/boost
+    BOOST_LIB_PATH=/usr/lib/x86_64-linux-gnu/
+    
+    DEFINES += IS_ARCH_64
+}
 
 LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_LIB_SUFFIX
-
-BDB_INCLUDE_PATH=c:/deps/db-4.8.30.NC/build_unix
-BDB_LIB_PATH=c:/deps/db-4.8.30.NC/build_unix
-OPENSSL_INCLUDE_PATH=c:/deps/openssl_1.0.1h/include
-OPENSSL_LIB_PATH=c:/deps/openssl_1.0.1h/lib/
-
-MINIUPNPC_INCLUDE_PATH=c:/deps/miniupnpc
-MINIUPNPC_LIB_PATH=c:/deps/miniupnpc
 
 OBJECTS_DIR = build
 MOC_DIR = build
 UI_DIR = build
 
 #USE_UPNP=-
-
+USE_QRCODE=1
 
 # use: qmake "RELEASE=1"
 contains(RELEASE, 1) {
@@ -63,9 +88,6 @@ QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 # We need to exclude this for Windows cross compile with MinGW 4.2.x, as it will result in a non-working executable!
 # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
-
-# When compiling for 64bit systems only:
-DEFINES += IS_ARCH_64
 }
 
 # for extra security on Windows: enable ASLR and DEP via GCC linker flags
