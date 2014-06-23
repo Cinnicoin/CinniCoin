@@ -413,8 +413,10 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
-    QToolBar *toolbar = new QToolBar("Main toolbar", this);
+    QToolBar *toolbar = new QToolBar(tr("Main toolbar"));
+
     addToolBar(Qt::LeftToolBarArea, toolbar);
+    toolbar->setAllowedAreas(Qt::TopToolBarArea | Qt::LeftToolBarArea | Qt::RightToolBarArea | Qt::BottomToolBarArea);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
