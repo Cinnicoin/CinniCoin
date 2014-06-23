@@ -40,7 +40,7 @@ SendMessagesDialog::SendMessagesDialog(Mode mode, Type type, QWidget *parent) :
 
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
-    connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
+    connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(reject()));
 
     fNewRecipientAllowed = true;
 
@@ -88,15 +88,19 @@ void SendMessagesDialog::loadRow(int row)
     }
 }
 
-void SendMessagesDialog::loadInvoice(QString message)
+void SendMessagesDialog::loadInvoice(QString message, QString from_address, QString to_address)
 {
+    ui->addressFrom->setText(from_address);
+
     for(int i = 0; i < ui->entries->count(); ++i)
     {
         SendMessagesEntry *entry = qobject_cast<SendMessagesEntry*>(ui->entries->itemAt(i)->widget());
 
         if(entry)
-            entry->loadInvoice(message);
+            entry->loadInvoice(message, to_address);
     }
+
+    ui->addButton->setVisible(false);
 }
 
 bool SendMessagesDialog::checkMode(Mode mode)
@@ -259,16 +263,27 @@ void SendMessagesDialog::clear()
 
 void SendMessagesDialog::reject()
 {
-    clear();
+    if(type == SendMessagesDialog::Dialog)
+        done(1);
+    else
+        clear();
 }
 
 void SendMessagesDialog::accept()
 {
-    clear();
-
     if(type == SendMessagesDialog::Dialog)
-        QDialog::done(0);
+        done(0);
+    else
+        clear();
 
+}
+
+void SendMessagesDialog::done(int retval)
+{
+    if(type == SendMessagesDialog::Dialog)
+        QDialog::done(retval);
+    else
+        clear();
 }
 
 SendMessagesEntry *SendMessagesDialog::addEntry()

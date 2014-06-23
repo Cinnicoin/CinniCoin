@@ -109,9 +109,15 @@ void SendMessagesEntry::loadRow(int row)
         ui->sendTo->setText(model->data(model->index(row, model->ToAddress, QModelIndex()), Qt::DisplayRole).toString());
 }
 
-void SendMessagesEntry::loadInvoice(QString message)
+void SendMessagesEntry::loadInvoice(QString message, QString to_address)
 {
+    ui->sendTo->setText(to_address);
     ui->messageText->setPlainText(message);
+    if(message!="")
+    {
+        ui->messageLabel->setVisible(false);
+        ui->messageText->setVisible(false);
+    }
 }
 
 void SendMessagesEntry::setRemoveEnabled(bool enabled)

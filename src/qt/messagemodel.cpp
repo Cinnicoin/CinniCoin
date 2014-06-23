@@ -20,7 +20,7 @@
 #include <QFont>
 #include <QColor>
 
-/// DEBUG #include <QDebug>
+// DEBUG #include <QDebug>
 
 const QString MessageModel::Sent = "Sent";
 const QString MessageModel::Received = "Received";
@@ -39,6 +39,13 @@ struct InvoiceTableEntryLessThan
     bool operator()(const QDateTime         &a, const InvoiceTableEntry &b) const {return a < b.received_datetime;}
 };
 
+struct ReceiptTableEntryLessThan
+{
+    bool operator()(const ReceiptTableEntry &a, const ReceiptTableEntry &b) const {return a.received_datetime < b.received_datetime;};
+    bool operator()(const ReceiptTableEntry &a, const QDateTime         &b) const {return a.received_datetime < b;}
+    bool operator()(const QDateTime         &a, const ReceiptTableEntry &b) const {return a < b.received_datetime;}
+};
+
 // Private implementation
 class MessageTablePriv
 {
@@ -46,6 +53,7 @@ public:
     QList<MessageTableEntry> cachedMessageTable;
     QList<InvoiceTableEntry> cachedInvoiceTable;
     QList<InvoiceItemTableEntry> cachedInvoiceItemTable;
+    QList<ReceiptTableEntry> cachedReceiptTable;
     MessageModel *parent;
 
     MessageTablePriv(MessageModel *parent):
@@ -56,6 +64,7 @@ public:
         cachedMessageTable.clear();
         cachedInvoiceTable.clear();
         cachedInvoiceItemTable.clear();
+        cachedReceiptTable.clear();
         
         if (parent->getWalletModel()->getEncryptionStatus() == WalletModel::Locked)
         {
@@ -256,6 +265,10 @@ public:
         // -- wallet is unlocked, can get at the private keys now
         refreshMessageTable();
         parent->reset(); // reload table view
+        parent->getInvoiceTableModel()->reset();
+        parent->getInvoiceTableModel()->getInvoiceItemTableModel()->reset();
+        parent->getReceiptTableModel()->reset();
+
         //invalidateFilter()
     }
     
@@ -267,13 +280,23 @@ public:
             cachedMessageTable.clear();
             cachedInvoiceTable.clear();
             cachedInvoiceItemTable.clear();
+            cachedReceiptTable.clear();
+
             parent->reset(); // reload table view
+            parent->getInvoiceTableModel()->reset();
+            parent->getInvoiceTableModel()->getInvoiceItemTableModel()->reset();
+            parent->getReceiptTableModel()->reset();
         };
     };
 
     void newInvoice(InvoiceTableEntry invoice)
     {
         addInvoiceEntry(invoice, false);
+    }
+
+    void newReceipt(ReceiptTableEntry receipt)
+    {
+        addReceiptEntry(receipt, false);
     }
 
     void newInvoiceItem()
@@ -318,11 +341,35 @@ public:
 
         invoice.push_back(json_spirit::Pair("items", items));
 
-        parent->getInvoiceTableModel()->beginRemoveRows(QModelIndex(), 0, 0);
-        cachedInvoiceTable.removeAt(row);
-        parent->getInvoiceTableModel()->endRemoveRows();
+        if(row==0)
+        {
+            parent->getInvoiceTableModel()->beginRemoveRows(QModelIndex(), 0, 0);
+            cachedInvoiceTable.removeAt(row);
+            parent->getInvoiceTableModel()->endRemoveRows();
+        }
 
         return QString::fromStdString(json_spirit::write(invoice));
+    }
+
+    QString getReceiptJSON(const int row)
+    {
+        QList<ReceiptTableEntry>::iterator inv;
+        json_spirit::Object receipt;
+
+        receipt.push_back(json_spirit::Pair("type", "receipt" ));
+        receipt.push_back(json_spirit::Pair("invoice_number",     cachedReceiptTable[row].invoice_number.toStdString()));
+        receipt.push_back(json_spirit::Pair("amount",             int64_t(cachedReceiptTable[row].amount)));
+        //receipt.push_back(json_spirit::Pair("outstanding",        "0")); //TODO: Calculate outstanding. cachedReceiptTable[row].amount.toStdString()));
+
+        if(row==0)
+        {
+            parent->getReceiptTableModel()->beginRemoveRows(QModelIndex(), 0, 0);
+            cachedReceiptTable.removeAt(row);
+            parent->getReceiptTableModel()->endRemoveRows();
+        }
+        //qDebug() << QString::fromStdString(json_spirit::write(receipt));
+
+        return QString::fromStdString(json_spirit::write(receipt));
     }
 
     MessageTableEntry *index(int idx)
@@ -397,6 +444,7 @@ private:
                     json_spirit::mObject item_obj = items[i].get_obj();
 
                     addInvoiceItemEntry(InvoiceItemTableEntry(message.vchKey,
+                                                              message.type,
                                                               QString::fromStdString(get_value(item_obj,        "code")),
                                                               QString::fromStdString(get_value(item_obj, "description")),
                                                               find_value(item_obj, "quantity").get_int(),
@@ -420,6 +468,11 @@ private:
             }
             else if (type == "receipt")
             {
+
+                addReceiptEntry(ReceiptTableEntry(message,
+                                                  QString::fromStdString(get_value(mObj, "invoice_number")),
+                                                  find_value(mObj, "amount").get_int64()),
+                                append);
                 // DEBUG std::string str = json_spirit::write(mVal);
                 // DEBUG qDebug() << "receipt" << str.c_str();
             }
@@ -476,6 +529,18 @@ private:
         }
     }
 
+    void addReceiptEntry(const ReceiptTableEntry & receipt, const bool append)
+    {
+        if(append) cachedReceiptTable.append(receipt);
+        else
+        {
+            int index = qLowerBound(cachedReceiptTable.begin(), cachedReceiptTable.end(), receipt.received_datetime, ReceiptTableEntryLessThan()) - cachedReceiptTable.begin();
+            parent->getReceiptTableModel()->beginInsertRows(QModelIndex(), index, index);
+            cachedReceiptTable.insert(index, receipt);
+            parent->getReceiptTableModel()->endInsertRows();
+        }
+    }
+
 };
 
 MessageModel::MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *parent) :
@@ -488,6 +553,7 @@ MessageModel::MessageModel(CWallet *wallet, WalletModel *walletModel, QObject *p
     priv = new MessageTablePriv(this);
     priv->refreshMessageTable();
     invoiceTableModel = new InvoiceTableModel(priv, parent);
+    receiptTableModel = new ReceiptTableModel(priv, parent);
 
     subscribeToCoreSignals();
 }
@@ -496,6 +562,7 @@ MessageModel::~MessageModel()
 {
     delete priv;
     delete invoiceTableModel;
+    delete receiptTableModel;
     unsubscribeFromCoreSignals();
 }
 
@@ -535,6 +602,11 @@ OptionsModel *MessageModel::getOptionsModel()
 InvoiceTableModel *MessageModel::getInvoiceTableModel()
 {
     return invoiceTableModel;
+}
+
+ReceiptTableModel *MessageModel::getReceiptTableModel()
+{
+    return receiptTableModel;
 }
 
 MessageModel::StatusCode MessageModel::sendMessages(const QList<SendMessagesRecipient> &recipients, const QString &addressFrom)
@@ -805,6 +877,15 @@ void InvoiceTableModel::newInvoiceItem()
     priv->newInvoiceItem();
 }
 
+void InvoiceTableModel::newReceipt(QString InvoiceNumber, qint64  ReceiptAmount)
+{
+    ReceiptTableEntry receipt(true);
+    receipt.invoice_number = InvoiceNumber;
+    receipt.amount         = ReceiptAmount;
+
+    priv->newReceipt(receipt);
+}
+
 QString InvoiceTableModel::getInvoiceJSON(const int row)
 {
     return priv->getInvoiceJSON(row);
@@ -889,7 +970,7 @@ QVariant InvoiceTableModel::data(const QModelIndex &index, int role) const
                     case MessageTableEntry::Received: return MessageModel::Received;
                 }
             default:
-                return QString((char*)&rec->vchKey[0]);
+                return QString((char*)&rec->vchKey[0]) + QString::number(rec->type);
             }
     }
 
@@ -975,6 +1056,10 @@ bool InvoiceTableModel::removeRows(int row, int count, const QModelIndex & paren
 
     InvoiceTableEntry rec = priv->cachedInvoiceTable.at(row);
 
+    for (int i = 0; i < priv->cachedInvoiceItemTable.size(); i++)
+        if(priv->cachedInvoiceItemTable[i].vchKey == rec.vchKey && priv->cachedInvoiceItemTable[i].type == rec.type)
+            invoiceItemTableModel->removeRow(i);
+
     if(rec.type == MessageTableEntry::Received)
     {
 
@@ -1004,7 +1089,7 @@ bool InvoiceTableModel::removeRows(int row, int count, const QModelIndex & paren
 InvoiceItemTableModel::InvoiceItemTableModel(MessageTablePriv *priv, QObject *parent) :
     QAbstractTableModel(parent), priv(priv)
 {
-    columns << tr("Code") << tr("Description") << tr("Quantity") << tr("Price") /*<< tr("Tax")*/ << tr("Amount");
+    columns << tr("Type") << tr("Code") << tr("Description") << tr("Quantity") << tr("Price") /*<< tr("Tax")*/ << tr("Amount");
 
 }
 
@@ -1052,6 +1137,31 @@ QVariant InvoiceItemTableModel::data(const QModelIndex &index, int role) const
                     return BitcoinUnits::formatWithUnit(priv->parent->getOptionsModel()->getDisplayUnit(), rec->price);
                 case Amount:
                     return BitcoinUnits::formatWithUnit(priv->parent->getOptionsModel()->getDisplayUnit(), (rec->quantity * rec->price));
+                case Type:
+                    switch(rec->type)
+                    {
+                        case MessageTableEntry::Sent:     return MessageModel::Sent;
+                        case MessageTableEntry::Received: return MessageModel::Received;
+                    }
+            }
+            break;
+
+        case Qt::EditRole:
+            switch(index.column())
+            {
+                case Code:
+                     return rec->code;
+                case Description:
+                    return rec->description;
+                case Quantity:
+                    return rec->quantity;
+                //case Tax:
+                //    return rec->tax;
+                case Price:
+                    return BitcoinUnits::format(priv->parent->getOptionsModel()->getDisplayUnit(), rec->price);
+
+                case Amount:
+                    return rec->quantity * rec->price;
             }
             break;
 
@@ -1068,7 +1178,7 @@ QVariant InvoiceItemTableModel::data(const QModelIndex &index, int role) const
             break;
 
         case Qt::UserRole:
-            return QString((char*)&rec->vchKey[0]);
+            return QString((char*)&rec->vchKey[0]) + QString::number(rec->type);
     }
 
     return QVariant();
@@ -1080,9 +1190,6 @@ bool InvoiceItemTableModel::setData(const QModelIndex & index, const QVariant & 
         return false;
 
     InvoiceItemTableEntry *rec = static_cast<InvoiceItemTableEntry*>(index.internalPointer());
-
-    //editStatus = OK;
-
 
     if(role == Qt::EditRole)
     {
@@ -1149,4 +1256,197 @@ bool InvoiceItemTableModel::removeRows(int row, int count, const QModelIndex & p
 void InvoiceItemTableModel::emitDataChanged(const int idx)
 {
     emit dataChanged(index(idx, 0, QModelIndex()), index(idx, columns.length()-1, QModelIndex()));
+}
+
+
+
+// ReceiptTableModel
+ReceiptTableModel::ReceiptTableModel(MessageTablePriv *priv, QObject *parent) :
+    QAbstractTableModel(parent), priv(priv)
+{
+    columns << tr("Type") << tr("Sent Date Time") << tr("Recieved Date Time") << tr("Label") << tr("To Address") << tr("From Address") << tr("Invoice No.") << "Receipt Amount" << "Amount Outstanding";
+}
+
+ReceiptTableModel::~ReceiptTableModel()
+{
+
+}
+
+QString ReceiptTableModel::getReceiptJSON(const int row)
+{
+    return priv->getReceiptJSON(row);
+}
+
+int ReceiptTableModel::rowCount(const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+    return priv->cachedReceiptTable.size();
+}
+
+int ReceiptTableModel::columnCount(const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+    return columns.length();
+}
+
+QVariant ReceiptTableModel::data(const QModelIndex &index, int role) const
+{
+    if(!index.isValid())
+        return QVariant();
+
+    ReceiptTableEntry *rec;
+
+    if(role != Qt::TextAlignmentRole)
+         rec = static_cast<ReceiptTableEntry*>(index.internalPointer());
+
+    switch(role)
+    {
+        case Qt::DisplayRole:
+            switch(index.column())
+            {
+                case Label:             return (rec->label.isEmpty() ? tr("(no label)") : rec->label);
+                case ToAddress:         return rec->to_address;
+                case FromAddress:       return rec->from_address;
+                case SentDateTime:      return rec->sent_datetime;
+                case ReceivedDateTime:  return rec->received_datetime;
+                case InvoiceNumber:     return rec->invoice_number;
+                case Amount:            return BitcoinUnits::formatWithUnit(priv->parent->getOptionsModel()->getDisplayUnit(), rec->amount);
+                case Type:
+                    switch(rec->type)
+                    {
+                    case MessageTableEntry::Sent:     return MessageModel::Sent;
+                    case MessageTableEntry::Received: return MessageModel::Received;
+                    }
+                default: break;
+            }
+            break;
+
+        case Qt::TextAlignmentRole:
+            switch(index.column())
+            {
+                case InvoiceNumber:
+                case Amount:
+                    return Qt::AlignRight;
+                default: break;
+            }
+            break;
+
+        case Qt::UserRole:
+            switch(index.column())
+            {
+            case Type:
+                switch(rec->type)
+                {
+                    case MessageTableEntry::Sent:     return MessageModel::Sent;
+                    case MessageTableEntry::Received: return MessageModel::Received;
+                }
+            default:
+                return QString((char*)&rec->vchKey[0]) + QString::number(rec->type);
+            }
+    }
+
+    return QVariant();
+}
+
+/*
+bool ReceiptTableModel::setData(const QModelIndex & index, const QVariant & value, int role)
+{
+    if(!index.isValid())
+        return false;
+
+    qDebug() << value << index;
+    InvoiceTableEntry *rec = static_cast<InvoiceTableEntry*>(index.internalPointer());
+
+    //editStatus = OK;
+
+    if(role == Qt::EditRole)
+    {
+        qDebug() << value << index;
+
+        switch(index.column())
+        {
+            case InvoiceNumber:    rec->invoice_number     = value.toString(); break;
+            case DueDate:          rec->due_date           = value.toDate(); break;
+            case CompanyInfoLeft:  rec->company_info_left  = value.toString(); break;
+            case CompanyInfoRight: rec->company_info_right = value.toString(); break;
+            case BillingInfoLeft:  rec->billing_info_left  = value.toString(); break;
+            case BillingInfoRight: rec->billing_info_right = value.toString(); break;
+            case Footer:           rec->footer             = value.toString(); break;
+        }
+
+        return true;
+    }
+    return false;
+}
+
+void ReceiptTableModel::setData(const int row, const int col, const QVariant & value)
+{
+    InvoiceTableEntry rec = priv->cachedInvoiceTable.at(row);
+
+    qDebug() << value << col;
+
+    switch(col)
+    {
+        case InvoiceNumber:    rec.invoice_number     = value.toString(); break;
+        case DueDate:          rec.due_date           = value.toDate();   break;
+        case CompanyInfoLeft:  rec.company_info_left  = value.toString(); break;
+        case CompanyInfoRight: rec.company_info_right = value.toString(); break;
+        case BillingInfoLeft:  rec.billing_info_left  = value.toString(); break;
+        case BillingInfoRight: rec.billing_info_right = value.toString(); break;
+        case Footer:           rec.footer             = value.toString(); break;
+    }
+}
+*/
+
+QVariant ReceiptTableModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    return (orientation == Qt::Horizontal && role == Qt::DisplayRole ? columns[section] : QVariant());
+}
+
+Qt::ItemFlags ReceiptTableModel::flags(const QModelIndex & index) const
+{
+    if(index.isValid())
+        return Qt::ItemIsSelectable | Qt::ItemIsEnabled;
+
+    return 0;
+}
+
+QModelIndex ReceiptTableModel::index(int row, int column, const QModelIndex & parent) const
+{
+    Q_UNUSED(parent);
+    return (row >= 0 && row < priv->cachedReceiptTable.size() ? createIndex(row, column, &priv->cachedReceiptTable[row]) : QModelIndex());
+}
+
+bool ReceiptTableModel::removeRows(int row, int count, const QModelIndex & parent)
+{
+
+    if(count != 1 || !(row >= 0 && row < priv->cachedInvoiceTable.size()))
+        // Can only remove one row at a time, and cannot remove rows not in model.
+        // Also refuse to remove receiving addresses.
+        return false;
+
+    ReceiptTableEntry rec = priv->cachedReceiptTable.at(row);
+
+    if(rec.type == MessageTableEntry::Received)
+    {
+
+        LOCK(cs_smsgInbox);
+        CSmesgInboxDB dbInbox("cr+");
+
+        dbInbox.EraseSmesg(rec.vchKey);
+
+    } else
+    if(rec.type == MessageTableEntry::Sent)
+    {
+        LOCK(cs_smsgOutbox);
+        CSmesgOutboxDB dbOutbox("cr+");
+
+        dbOutbox.EraseSmesg(rec.vchKey);
+    }
+
+    beginRemoveRows(parent, row, row);
+    priv->cachedReceiptTable.removeAt(row);
+    endRemoveRows();
+
+    return true;
 }

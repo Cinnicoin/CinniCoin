@@ -20,7 +20,7 @@ public:
 
     void setModel(MessageModel *model);
     void loadRow(int row);
-    void loadInvoice(QString message);
+    void loadInvoice(QString message, QString to_address);
     bool validate();
     SendMessagesRecipient getValue();
 

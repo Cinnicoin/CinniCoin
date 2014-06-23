@@ -26,7 +26,7 @@ public:
     ~InvoiceViewPage();
 
     void setModel(InvoiceTableModel *model);
-    void loadRow(int row);
+    void loadRow(int row, bool allowEdit = false);
     void newInvoice();
 
 private:
@@ -35,6 +35,8 @@ private:
     QSortFilterProxyModel *proxyModel;
     QSortFilterProxyModel *invoiceProxyModel;
     QAction *sendAction;
+    bool resend;
+    int curRow;
 
 private slots:
     void on_sendButton_clicked();

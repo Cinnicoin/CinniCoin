@@ -38,7 +38,7 @@ public:
 
     void setModel (MessageModel *model);
     void loadRow(int row);
-    void loadInvoice(QString message);
+    void loadInvoice(QString message, QString from_address = "", QString to_address = "");
     bool checkMode(Mode mode);
     bool validate ();
 
@@ -49,6 +49,7 @@ public:
     void pasteEntry(const SendMessagesRecipient &rv);
 
 public slots:
+    void done(int retval);
     void clear();
     void reject();
     void accept();

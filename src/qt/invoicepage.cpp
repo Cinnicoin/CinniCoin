@@ -5,6 +5,7 @@
 #include "sendmessagesdialog.h"
 #include "invoiceviewpage.h"
 #include "messagemodel.h"
+#include "optionsmodel.h"
 #include "bitcoingui.h"
 #include "csvmodelwriter.h"
 #include "guiutil.h"
@@ -12,6 +13,8 @@
 #include <QSortFilterProxyModel>
 #include <QClipboard>
 #include <QMessageBox>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QMenu>
 
 InvoicePage::InvoicePage(QWidget *parent) :
@@ -29,6 +32,7 @@ InvoicePage::InvoicePage(QWidget *parent) :
     replyAction           = new QAction(ui->replyButton->text(),           this);
     payAction             = new QAction(ui->payButton->text(),             this);
     resendAction          = new QAction(ui->resendButton->text(),          this);
+    receiptAction         = new QAction(ui->receiptButton->text(),         this);
     copyFromAddressAction = new QAction(ui->copyFromAddressButton->text(), this);
     copyToAddressAction   = new QAction(ui->copyToAddressButton->text(),   this);
     deleteAction          = new QAction(ui->deleteButton->text(),          this);
@@ -44,7 +48,8 @@ InvoicePage::InvoicePage(QWidget *parent) :
     //contextMenu->addAction(viewAction);
 
     connect(payAction,             SIGNAL(triggered()), this, SLOT(on_payButton_clicked()));
-    connect(resendAction,          SIGNAL(triggered()), this, SLOT(on_replyButton_clicked()));
+    connect(resendAction,          SIGNAL(triggered()), this, SLOT(on_resendButton_clicked()));
+    connect(receiptAction,         SIGNAL(triggered()), this, SLOT(on_receiptButton_clicked()));
     connect(replyAction,           SIGNAL(triggered()), this, SLOT(on_replyButton_clicked()));
     connect(copyFromAddressAction, SIGNAL(triggered()), this, SLOT(on_copyFromAddressButton_clicked()));
     connect(copyToAddressAction,   SIGNAL(triggered()), this, SLOT(on_copyToAddressButton_clicked()));
@@ -135,6 +140,64 @@ void InvoicePage::on_payButton_clicked()
     //dlg.exec();
 }
 
+void InvoicePage::on_resendButton_clicked()
+{
+    if(!model)
+        return;
+
+    if(!ui->tableView->selectionModel())
+        return;
+
+    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows();
+
+    if(indexes.isEmpty())
+        return;
+
+    InvoiceViewPage dlg(this);
+
+    dlg.setModel(model);
+    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
+    dlg.loadRow(origIndex.row(), true);
+    dlg.exec();
+}
+
+void InvoicePage::on_receiptButton_clicked()
+{
+    if(!model)
+        return;
+
+    if(!ui->tableView->selectionModel())
+        return;
+
+    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows();
+
+    if(indexes.isEmpty())
+        return;
+
+    bool ok;
+    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
+    qint64 amount;
+    BitcoinUnits::parse(model->getMessageModel()->getOptionsModel()->getDisplayUnit(),
+                        QInputDialog::getText(this,
+                                              tr("Send Receipt to ")                + model->data(model->index(origIndex.row(), model->Label,  QModelIndex()), Qt::DisplayRole).toString(),
+                                              tr("Amount Paid:"), QLineEdit::Normal , model->data(model->index(origIndex.row(), model->Total,  QModelIndex()), Qt::DisplayRole).toString().replace(" " + BitcoinUnits::name(model->getMessageModel()->getOptionsModel()->getDisplayUnit()), ""), &ok),
+                        &amount);
+
+    if(!ok)
+        return;
+
+    model->newReceipt(model->data(model->index(origIndex.row(), model->InvoiceNumber,  QModelIndex()), Qt::DisplayRole).toString(), amount);
+
+    SendMessagesDialog dlg(SendMessagesDialog::Encrypted, SendMessagesDialog::Dialog, this);
+
+    dlg.setModel(model->getMessageModel());
+
+    dlg.loadInvoice(model->getMessageModel()->getReceiptTableModel()->getReceiptJSON(0),
+                    model->data(model->index(origIndex.row(), model->FromAddress, QModelIndex()), Qt::DisplayRole).toString(),
+                    model->data(model->index(origIndex.row(), model->ToAddress,   QModelIndex()), Qt::DisplayRole).toString());
+    dlg.exec();
+}
+
 void InvoicePage::on_replyButton_clicked()
 {
     if(!model)
@@ -152,7 +215,7 @@ void InvoicePage::on_replyButton_clicked()
 
     dlg.setModel(model->getMessageModel());
     QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
-    dlg.loadRow(origIndex.row());
+    dlg.loadInvoice("", model->data(model->index(origIndex.row(), model->FromAddress,  QModelIndex()), Qt::DisplayRole).toString(), model->data(model->index(origIndex.row(), model->ToAddress,  QModelIndex()), Qt::DisplayRole).toString());
     dlg.exec();
 }
 
@@ -208,14 +271,25 @@ void InvoicePage::selectionChanged()
             ui->resendButton->setEnabled(sent);
             ui->resendButton->setVisible(sent);
 
-            payAction->setEnabled(!sent);
-            ui->payButton->setEnabled(!sent);
-            ui->payButton->setVisible(!sent);
+            receiptAction->setEnabled(sent);
+            ui->receiptButton->setEnabled(sent);
+            ui->receiptButton->setVisible(sent);
+
+            //payAction->setEnabled(!sent);
+            //ui->payButton->setEnabled(!sent);
+            //ui->payButton->setVisible(!sent);
         }
 
     }
     else
     {
+        payAction->setEnabled(false);
+        ui->payButton->setEnabled(false);
+        ui->payButton->setVisible(false);
+
+        ui->receiptButton->setEnabled(false);
+        ui->resendButton->setEnabled(false);
+        ui->payButton->setEnabled(false);
         ui->replyButton->setEnabled(false);
         ui->copyFromAddressButton->setEnabled(false);
         ui->copyToAddressButton->setEnabled(false);

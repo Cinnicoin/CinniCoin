@@ -1,13 +1,14 @@
-#ifndef INVOICEPAGE_H
-#define INVOICEPAGE_H
+#ifndef RECEIPTPAGE_H
+#define RECEIPTPAGE_H
 
 #include <QWidget>
 
 namespace Ui {
-    class InvoicePage;
+    class ReceiptPage;
 }
 class MessageModel;
 class InvoiceTableModel;
+class ReceiptTableModel;
 
 QT_BEGIN_NAMESPACE
 class QTableView;
@@ -20,14 +21,14 @@ QT_END_NAMESPACE
 
 /** Widget that shows a list of sending or receiving addresses.
   */
-class InvoicePage : public QWidget
+class ReceiptPage : public QWidget
 {
     Q_OBJECT
 
 public:
 
-    explicit InvoicePage(QWidget *parent = 0);
-    ~InvoicePage();
+    explicit ReceiptPage(QWidget *parent = 0);
+    ~ReceiptPage();
 
     void setModel(MessageModel *model);
 
@@ -35,14 +36,13 @@ public slots:
     void exportClicked();
 
 private:
-    Ui::InvoicePage *ui;
-    InvoiceTableModel *model;
+    Ui::ReceiptPage *ui;
+    ReceiptTableModel *model;
+    MessageModel *messageModel;
     QSortFilterProxyModel *proxyModel;
     QMenu *contextMenu;
     QAction *replyAction;
-    QAction *payAction;
     QAction *resendAction;
-    QAction *receiptAction;
     QAction *copyFromAddressAction;
     QAction *copyToAddressAction;
     QAction *deleteAction;
@@ -50,15 +50,11 @@ private:
 
 private slots:
     void on_newButton_clicked();
-    void on_payButton_clicked();
     void on_replyButton_clicked();
-    void on_resendButton_clicked();
-    void on_receiptButton_clicked();
     void on_copyFromAddressButton_clicked();
     void on_copyToAddressButton_clicked();
     void on_deleteButton_clicked();
     void selectionChanged();
-    void viewInvoice(const QModelIndex & index);
 
     /** Spawn contextual menu (right mouse menu) for address book entry */
     void contextualMenu(const QPoint &point);
@@ -66,4 +62,4 @@ private slots:
 signals:
 };
 
-#endif // INVOICEPAGE_H
+#endif // RECEIPTPAGE_H

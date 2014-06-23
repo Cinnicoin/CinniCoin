@@ -83,7 +83,7 @@ private:
     AddressBookPage *receiveCoinsPage;
     MessagePage *messagePage;
     InvoicePage *invoicePage;
-    AddressBookPage *receiptPage;
+    ReceiptPage *receiptPage;
     SendCoinsDialog *sendCoinsPage;
     SendMessagesDialog *sendMessagesPage;
     SendMessagesDialog *sendMessagesAnonPage;
@@ -184,6 +184,8 @@ private slots:
     void gotoMessagesPage();
     /** Switch to invoices page */
     void gotoInvoicesPage();
+    /** Switch to receipt page */
+    void gotoReceiptPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");

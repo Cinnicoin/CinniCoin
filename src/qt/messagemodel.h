@@ -15,6 +15,7 @@
 class MessageTablePriv;
 class InvoiceTableModel;
 class InvoiceItemTableModel;
+class ReceiptTableModel;
 class CWallet;
 class WalletModel;
 class OptionsModel;
@@ -105,6 +106,7 @@ public:
     WalletModel *getWalletModel();
     OptionsModel *getOptionsModel();
     InvoiceTableModel *getInvoiceTableModel();
+    ReceiptTableModel *getReceiptTableModel();
 
     bool getAddressOrPubkey( QString &Address,  QString &Pubkey) const;
 
@@ -118,6 +120,7 @@ private:
     OptionsModel *optionsModel;
     MessageTablePriv *priv;
     InvoiceTableModel *invoiceTableModel;
+    ReceiptTableModel *receiptTableModel;
     QStringList columns;
 
     void subscribeToCoreSignals();
@@ -145,6 +148,7 @@ struct InvoiceItemTableEntry
 {
 
     std::vector<unsigned char> vchKey;
+    MessageTableEntry::Type type;
     QString code;
     QString description;
     int     quantity;
@@ -153,13 +157,13 @@ struct InvoiceItemTableEntry
 
     InvoiceItemTableEntry(){};
     InvoiceItemTableEntry(const bool newInvoice):
-        vchKey(0), code(""), description(""), quantity(0), price(0)
+        vchKey(0), type(MessageTableEntry::Sent), code(""), description(""), quantity(0), price(0)
     {
         vchKey.resize(3);
         memcpy(&vchKey[0], "new", 3);
     };
-    InvoiceItemTableEntry(const std::vector<unsigned char> vchKey, const QString &code, const QString &description, const int &quantity, const qint64 &price): //, const bool &tax):
-        vchKey(vchKey), code(code), description(description), quantity(quantity), price(price) {} //, tax(tax) {}
+    InvoiceItemTableEntry(const std::vector<unsigned char> vchKey, MessageTableEntry::Type type, const QString &code, const QString &description, const int &quantity, const qint64 &price): //, const bool &tax):
+        vchKey(vchKey), type(type), code(code), description(description), quantity(quantity), price(price) {} //, tax(tax) {}
 };
 
 
@@ -259,6 +263,7 @@ public:
                     QString InvoiceNumber);
 
     void newInvoiceItem();
+    void newReceipt(QString InvoiceNumber, qint64 ReceiptAmount);
     //void setData(const int row, const int col, const QVariant & value);
 
     QString getInvoiceJSON(const int row);
@@ -286,12 +291,13 @@ public:
     ~InvoiceItemTableModel();
 
     enum ColumnIndex {
-        Code = 0,   /**< Item Code */
-        Description = 1, /**< Item Description */
-        Quantity = 2, /**< Item quantity */
-        Price = 3,   /**< Item Price */
+        Type = 0,   /**< Sent/Received */
+        Code = 1,   /**< Item Code */
+        Description = 2, /**< Item Description */
+        Quantity = 3, /**< Item quantity */
+        Price = 4,   /**< Item Price */
         //Tax = 4,   /**< Item Price */
-        Amount = 4, /**< Total for row */
+        Amount = 5, /**< Total for row */
     };
 
     /** @name Methods overridden from QAbstractTableModel
@@ -313,6 +319,86 @@ private:
 
     /** Notify listeners that data changed. */
     void emitDataChanged(const int idx);
+
+public slots:
+    friend class MessageTablePriv;
+};
+
+
+struct ReceiptTableEntry
+{
+    std::vector<unsigned char> vchKey;
+    MessageTableEntry::Type type;
+    QString label;
+    QString to_address;
+    QString from_address;
+    QDateTime sent_datetime;
+    QDateTime received_datetime;
+    QString invoice_number;
+    qint64  amount;
+
+    ReceiptTableEntry() {}
+    ReceiptTableEntry(const bool newReceipt):
+        vchKey(0), type(MessageTableEntry::Sent), label(""), to_address(""), from_address(""), sent_datetime(), received_datetime(), invoice_number(""), amount(0)
+    {
+        vchKey.resize(3);
+        memcpy(&vchKey[0], "new", 3);
+    };
+
+    ReceiptTableEntry(const std::vector<unsigned char> vchKey, MessageTableEntry::Type type, const QString &label, const QString &to_address, const QString &from_address,
+                      const QDateTime &sent_datetime, const QDateTime &received_datetime, const QString &invoice_number, const qint64 &amount):
+        vchKey(vchKey), type(type), label(label), to_address(to_address), from_address(from_address), sent_datetime(sent_datetime), received_datetime(received_datetime),
+        invoice_number(invoice_number), amount(amount)
+    {}
+    ReceiptTableEntry(const MessageTableEntry &messageTableEntry, const QString &invoice_number, const qint64 &amount):
+        vchKey(messageTableEntry.vchKey), type(messageTableEntry.type), label(messageTableEntry.label), to_address(messageTableEntry.to_address), from_address(messageTableEntry.from_address),
+        sent_datetime(messageTableEntry.sent_datetime), received_datetime(messageTableEntry.received_datetime), invoice_number(invoice_number), amount(amount)
+    {}
+    ReceiptTableEntry(const InvoiceTableEntry &invoiceTableEntry, const qint64 &amount):
+        vchKey(invoiceTableEntry.vchKey), type(invoiceTableEntry.type), label(invoiceTableEntry.label), to_address(invoiceTableEntry.to_address), from_address(invoiceTableEntry.from_address),
+        sent_datetime(invoiceTableEntry.sent_datetime), received_datetime(invoiceTableEntry.received_datetime), invoice_number(invoiceTableEntry.invoice_number), amount(amount)
+    {}
+};
+
+
+/** Interface to Cinnicoin Secure Messaging Receipts from Qt view code. */
+class ReceiptTableModel : public QAbstractTableModel
+{
+    Q_OBJECT
+
+public:
+    explicit ReceiptTableModel(MessageTablePriv *priv, QObject *parent = 0);
+    ~ReceiptTableModel();
+
+    enum ColumnIndex {
+        Type = 0,   /**< Sent/Received */
+        SentDateTime = 1, /**< Time Sent */
+        ReceivedDateTime = 2, /**< Time Received */
+        Label = 3,   /**< User specified label */
+        ToAddress = 4, /**< To Bitcoin address */
+        FromAddress = 5, /**< From Bitcoin address */
+        InvoiceNumber = 6, /**< Plaintext */
+        Amount = 7, /**< qint64 */
+        Outstanding = 8, /**< qint64 */
+    };
+
+    /** @name Methods overridden from QAbstractTableModel
+        @{*/
+    int rowCount(const QModelIndex &parent) const;
+    int columnCount(const QModelIndex &parent) const;
+    QVariant data(const QModelIndex &index, int role) const;
+    //bool setData(const QModelIndex & index, const QVariant & value, int role);
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+    QModelIndex index(int row, int column, const QModelIndex & parent) const;
+    bool removeRows(int row, int count, const QModelIndex & parent = QModelIndex());
+    Qt::ItemFlags flags(const QModelIndex & index) const;
+    /*@}*/
+
+    QString getReceiptJSON(const int row);
+
+private:
+    QStringList columns;
+    MessageTablePriv *priv;
 
 public slots:
     friend class MessageTablePriv;

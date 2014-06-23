@@ -52,6 +52,9 @@ void InvoiceViewPage::setModel(InvoiceTableModel *model)
     ui->invoiceItemTableView->horizontalHeader()->resizeSection(InvoiceItemTableModel::Price,            100);
     ui->invoiceItemTableView->horizontalHeader()->resizeSection(InvoiceItemTableModel::Amount,           100);
 
+    // Hidden columns
+    ui->invoiceItemTableView->setColumnHidden(InvoiceItemTableModel::Type, true);
+
     ui->subtotalLabel->setVisible(false);
     ui->taxLabel->setVisible(false);
     ui->subtotal->setVisible(false);
@@ -64,7 +67,7 @@ void InvoiceViewPage::setModel(InvoiceTableModel *model)
     //selectionChanged();
 }
 
-void InvoiceViewPage::loadRow(int row)
+void InvoiceViewPage::loadRow(int row, bool allowEdit)
 {
     ui->companyInfoLeft ->setText(model->data(model->index(row, model->CompanyInfoLeft,  QModelIndex()), Qt::DisplayRole).toString());
     ui->companyInfoRight->setText(model->data(model->index(row, model->CompanyInfoRight, QModelIndex()), Qt::DisplayRole).toString());
@@ -78,7 +81,9 @@ void InvoiceViewPage::loadRow(int row)
     proxyModel->setFilterRole(Qt::UserRole);
     proxyModel->setFilterFixedString(model->data(model->index(row, 999, QModelIndex()), Qt::UserRole).toString());
 
-    ui->sendButton->setVisible(false);
+    ui->sendButton->setVisible(allowEdit);
+    resend = allowEdit;
+    curRow = row;
 }
 
 void InvoiceViewPage::newInvoice()
@@ -114,19 +119,25 @@ void InvoiceViewPage::on_sendButton_clicked()
 
     dlg.setModel(model->getMessageModel());
 
-    model->newInvoice(ui->companyInfoLeft->document()->toPlainText(),
-                      ui->companyInfoRight->document()->toPlainText(),
-                      ui->billingInfoLeft->document()->toPlainText(),
-                      ui->billingInfoRight->document()->toPlainText(),
-                      ui->footer->document()->toPlainText(),
-                      ui->dueDate->date(),
-                      ui->invoiceNumber->text());
+    if(resend)
+    {
+        dlg.loadInvoice(model->getInvoiceJSON(curRow), model->data(model->index(curRow, model->FromAddress,  QModelIndex()), Qt::DisplayRole).toString(), model->data(model->index(curRow, model->ToAddress, QModelIndex()), Qt::DisplayRole).toString());
+    }
+    else
+    {
+        model->newInvoice(ui->companyInfoLeft->document()->toPlainText(),
+                          ui->companyInfoRight->document()->toPlainText(),
+                          ui->billingInfoLeft->document()->toPlainText(),
+                          ui->billingInfoRight->document()->toPlainText(),
+                          ui->footer->document()->toPlainText(),
+                          ui->dueDate->date(),
+                          ui->invoiceNumber->text());
 
-    dlg.loadInvoice(model->getInvoiceJSON(0));
+        dlg.loadInvoice(model->getInvoiceJSON(0));
+    }
 
-    dlg.exec();
-
-    done(0);
+    if(dlg.exec() == 0)
+        done(0);
 }
 
 void InvoiceViewPage::updateTotal()
@@ -134,5 +145,15 @@ void InvoiceViewPage::updateTotal()
     if(!model)
         return;
 
-    ui->total->setText(invoiceProxyModel->data(invoiceProxyModel->index(0, InvoiceTableModel::Total, QModelIndex()), Qt::DisplayRole).toString());
+    int64 total = 0;
+    int rows = proxyModel->rowCount();
+
+    for(int i = 0; i < rows; i++)
+    {
+        total += proxyModel->data(proxyModel->index(i, InvoiceItemTableModel::Amount), Qt::EditRole).toLongLong();
+        if(i+1==rows && proxyModel->data(proxyModel->index(i, InvoiceItemTableModel::Code)).toString() != "")
+            model->newInvoiceItem();
+    }
+
+    ui->total->setText(BitcoinUnits::formatWithUnit(model->getMessageModel()->getOptionsModel()->getDisplayUnit(), total));
 }
