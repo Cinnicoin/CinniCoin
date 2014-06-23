@@ -1420,9 +1420,8 @@ QModelIndex ReceiptTableModel::index(int row, int column, const QModelIndex & pa
 bool ReceiptTableModel::removeRows(int row, int count, const QModelIndex & parent)
 {
 
-    if(count != 1 || !(row >= 0 && row < priv->cachedInvoiceTable.size()))
+    if(count != 1 || !(row >= 0 && row < priv->cachedReceiptTable.size()))
         // Can only remove one row at a time, and cannot remove rows not in model.
-        // Also refuse to remove receiving addresses.
         return false;
 
     ReceiptTableEntry rec = priv->cachedReceiptTable.at(row);
