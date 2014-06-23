@@ -251,7 +251,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/ircmodel.h \
     src/qt/messagepage.h \
     src/qt/invoicepage.h \
-    src/qt/invoiceviewpage.h
+    src/qt/invoiceviewpage.h \
+    src/qt/receiptpage.h
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/transactiontablemodel.cpp \
@@ -330,7 +331,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/ircmodel.cpp \
     src/qt/messagepage.cpp \
     src/qt/invoicepage.cpp \
-    src/qt/invoiceviewpage.cpp
+    src/qt/invoiceviewpage.cpp \
+    src/qt/receiptpage.cpp
 
 RESOURCES += \
     src/qt/bitcoin.qrc
@@ -352,7 +354,8 @@ FORMS += \
     src/qt/forms/sendmessagesdialog.ui \
     src/qt/forms/messagepage.ui \
     src/qt/forms/invoicepage.ui \
-    src/qt/forms/invoiceviewpage.ui
+    src/qt/forms/invoiceviewpage.ui \
+    src/qt/forms/receiptpage.ui
 
 contains(USE_QRCODE, 1) {
 HEADERS += src/qt/qrcodedialog.h
