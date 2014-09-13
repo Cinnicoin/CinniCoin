@@ -27,6 +27,10 @@ namespace Checkpoints
         (     0, hashGenesisBlockOfficial )
         (  15000, uint256("0x000000000553c75e55aa3e2340e79fb8e23942e65edbebf5321c54de3f1f1c2f"))
         (  30000, uint256("0x0000006ac84a75c612188858631ec42503bc7975008de4bb1695b8cc1e06ee1d"))
+        (  100000, uint256("0xdb2feff3b884ad8d99de05943b8c6e3e23a3d1330e6847f53d51bf201a673636"))
+        (  235000, uint256("0xad49d57c8c171e78bbed1bbd31f421afb9e1b771c435a4d2c8df3afd12cd1149"))
+        (  350000, uint256("0xf49430ae366694a0a49fde6dd10e93f1fc7ccd4de6cf9b162d9db6fb8cecde5a"))
+        (  500000, uint256("0xffcc444d4220081a215f4b21cfb49fced168c9d49a5aa773cfd0fcfd3f04faec"))
         ;
 
     static MapCheckpoints mapCheckpointsTestnet =
